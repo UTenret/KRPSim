@@ -1,7 +1,11 @@
 use std::env;
 use std::fs;
+use std::os::unix::process;
+use std::process::exit;
 
-struct Stock {
+mod parser;
+
+pub struct Stock {
     name: String,
     quantity: i32,
 }
@@ -15,7 +19,7 @@ impl Stock {
     }
 }
 
-struct Process {
+pub struct Process {
     needs: Vec<Stock>,
     constructs: Vec<Stock>,
 }
@@ -26,23 +30,42 @@ impl Process {
     }
 }
 
+pub struct Spec {
+    processes: Vec<Process>,
+    stocks: Vec<Stock>,
+    // optimize: Option<Time, String>, // need optimize there too
+}
+
+impl Spec {
+    fn new(processes: Vec<Process>, stocks: Vec<Stock>) -> Self {
+        Self { processes, stocks }
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
+    if args.len() == 1 {
+        println!("You need to specify a file");
+        std::process::exit(0);
+    }
 
     let file_path = &args[1];
 
-    let planche = Stock::new("planche", 5);
-    let casquette = Stock::new("casquette", 1);
+    let contents = fs::read_to_string(file_path).unwrap_or_else(|e| {
+        eprintln!("Failed to read the contents of the file : {}", e);
+        exit(1);
+    });
 
-    let become_a_baseball_player = Process::new(vec![planche, casquette], vec![]);
+    let res = parser::parse_spec(&contents).unwrap_or_else(|e| {
+        eprintln!("Error while parsing the contents of the file : {}", e);
+        exit(1);
+    });
 
-    let contents = fs::read_to_string(file_path);
+    // println!("File contents : {}", contents.unwrap());
 
-    println!("File contents : {}", contents.unwrap());
+    // let mut cycle: i32 = 0;
 
-    let mut cycle: i32 = 0;
-
-    while (cycle < 2000) {
-        cycle += 1;
-    }
+    // while (cycle < 2000) {
+    //     cycle += 1;
+    // }
 }
