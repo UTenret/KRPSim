@@ -5,13 +5,14 @@ use std::process::exit;
 
 mod parser;
 
+#[derive(Debug)]
 pub struct Stock {
     name: String,
-    quantity: i32,
+    quantity: i64,
 }
 
 impl Stock {
-    pub fn new(name: &str, quantity: i32) -> Self {
+    pub fn new(name: &str, quantity: i64) -> Self {
         Self {
             name: name.to_string(),
             quantity,
@@ -19,14 +20,22 @@ impl Stock {
     }
 }
 
+#[derive(Default)]
 pub struct Process {
+    name: String,
     needs: Vec<Stock>,
-    constructs: Vec<Stock>,
+    results: Vec<Stock>,
+    delay: i64,
 }
 
 impl Process {
-    fn new(needs: Vec<Stock>, constructs: Vec<Stock>) -> Self {
-        Self { needs, constructs }
+    fn new(name: &str, needs: Vec<Stock>, results: Vec<Stock>, delay: i64) -> Self {
+        Self {
+            name: name.to_string(),
+            needs,
+            results,
+            delay,
+        }
     }
 }
 
