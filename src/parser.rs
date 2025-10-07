@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fmt::Error;
 
 use crate::Optimize;
 use crate::Process;
@@ -11,7 +10,7 @@ pub fn parse_spec(input: &str) -> Result<Spec, String> {
     let mut stocks: HashMap<String, i64> = Default::default();
     let mut optimize = None;
 
-    for (index, line) in input.lines().enumerate() {
+    for (_, line) in input.lines().enumerate() {
         if line.starts_with('#') {
             continue;
         } else if line.starts_with("optimize") {

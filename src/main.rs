@@ -1,4 +1,5 @@
 use rand::Rng;
+use std::cmp::max;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use std::env;
@@ -72,7 +73,7 @@ impl Process {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Spec {
     stocks: HashMap<String, i64>,
     processes: Vec<Process>,
@@ -106,6 +107,63 @@ fn gen_possible_actions(spec: &Spec) -> Vec<Process> {
     possible_actions
 }
 
+fn random_solve(mut spec: Spec) -> i64 {
+    let mut heap: BinaryHeap<Reverse<Job>> = BinaryHeap::new();
+
+    let max_actions_per_turn = 20;
+
+    for cycles in 0..20000 {
+        while let Some(top) = heap.peek() {
+            if top.0.cycles == cycles {
+                let Reverse(job) = heap.pop().unwrap();
+                *spec.stocks.entry(job.stock.name.clone()).or_insert(0) += job.stock.quantity;
+            } else {
+                break;
+            }
+        }
+
+        let mut possible_actions: Vec<Process> = gen_possible_actions(&spec);
+        let mut nbr_actions = 0;
+
+        if possible_actions.is_empty() && heap.is_empty() {
+            println!("no more process doable at time {}", cycles);
+            break;
+        }
+
+        while !possible_actions.is_empty() {
+            let mut rng = rand::rng();
+            let idx = rng.random_range(0..possible_actions.len());
+
+            let action = &possible_actions[idx];
+
+            // println!("{}:{}", cycles, action.name);
+            for stock in &action.needs {
+                *spec.stocks.entry(stock.name.clone()).or_insert(0) -= stock.quantity;
+            }
+
+            for stock in &action.results {
+                heap.push(Reverse(Job {
+                    cycles: action.delay + cycles,
+                    stock: stock.clone(),
+                }));
+            }
+            possible_actions = gen_possible_actions(&spec);
+            nbr_actions += 1;
+            if nbr_actions > max_actions_per_turn {
+                break;
+            }
+        }
+    }
+
+    // for stock in &spec.stocks {
+    //     println!("{} => {}", stock.0, stock.1);
+    // }
+    let name = match &spec.optimize {
+        Optimize::Time(s) | Optimize::Quantity(s) => s.as_str(),
+    };
+    spec.stocks[name]
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() == 1 {
@@ -120,51 +178,20 @@ fn main() {
         exit(1);
     });
 
-    let mut spec = parser::parse_spec(&contents).unwrap_or_else(|e| {
+    let spec = parser::parse_spec(&contents).unwrap_or_else(|e| {
         eprintln!("Error while parsing the contents of the file : {}", e);
         exit(1);
     });
 
     println!("spec: {:?}", spec);
 
-    let mut heap: BinaryHeap<Reverse<Job>> = BinaryHeap::new();
-
-    for cycles in 0..2000 {
-        while let Some(top) = heap.peek() {
-            if top.0.cycles == cycles {
-                let Reverse(job) = heap.pop().unwrap();
-                *spec.stocks.entry(job.stock.name.clone()).or_insert(0) += job.stock.quantity;
-            } else {
-                break;
-            }
-        }
-
-        let mut possible_actions: Vec<Process> = gen_possible_actions(&spec);
-
-        while !possible_actions.is_empty() {
-            let mut rng = rand::rng();
-            let idx = rng.random_range(0..possible_actions.len());
-
-            let action = &possible_actions[idx];
-
-            println!("{}:{}", cycles, action.name);
-            for stock in &action.needs {
-                *spec.stocks.entry(stock.name.clone()).or_insert(0) -= stock.quantity;
-            }
-
-            for stock in &action.results {
-                heap.push(Reverse(Job {
-                    cycles: action.delay + cycles,
-                    stock: stock.clone(),
-                }));
-            }
-            possible_actions = gen_possible_actions(&spec);
-        }
+    let mut max_score = 0;
+    for _ in 1..50 {
+        let score = random_solve(spec.clone());
+        max_score = max(score, max_score);
+        println!("score: {}", score);
     }
-
-    for stock in &spec.stocks {
-        println!("{} => {}", stock.0, stock.1);
-    }
+    println!("max_score: {}", max_score);
 
     // let possible_actions = Vec
 
