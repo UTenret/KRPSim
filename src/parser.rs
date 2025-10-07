@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Error;
 
 use crate::Optimize;
@@ -7,7 +8,7 @@ use crate::Stock;
 
 pub fn parse_spec(input: &str) -> Result<Spec, String> {
     let mut processes: Vec<Process> = vec![];
-    let mut stocks: Vec<Stock> = vec![];
+    let mut stocks: HashMap<String, i64> = Default::default();
     let mut optimize = None;
 
     for (index, line) in input.lines().enumerate() {
@@ -20,15 +21,32 @@ pub fn parse_spec(input: &str) -> Result<Spec, String> {
             }
         } else if !line.contains('(') {
             let stock = parse_stock(line)?;
-            stocks.push(stock);
+            stocks.insert(stock.name, stock.quantity);
         } else {
             let process = parse_processes(line)?;
             processes.push(process);
         }
     }
 
+    for process in &processes {
+        for need in &process.needs {
+            stocks.entry(need.name.clone()).or_insert(0);
+        }
+        for result in &process.results {
+            stocks.entry(result.name.clone()).or_insert(0);
+        }
+    }
+
     if optimize.is_none() {
         return Err("Missing optimization".to_string());
+    }
+
+    let optimize_stock_name: &str = match optimize.as_ref().unwrap() {
+        Optimize::Quantity(s) | Optimize::Time(s) => s.as_str(),
+    };
+
+    if !stocks.is_empty() && !stocks.contains_key(optimize_stock_name) {
+        return Err("Invalid stock name for optimize".to_string());
     }
 
     Ok(Spec::new(processes, stocks, optimize.unwrap()))
@@ -162,18 +180,13 @@ fn parse_optimize(input: &str) -> Result<Optimize, String> {
 
     println!("opt: [{}]", optimize_str);
 
-    let optimize = match optimize_str.split_once(';') {
-        None => Optimize::Quantity(optimize_str.to_string()),
+    match optimize_str.split_once(';') {
+        None => return Ok(Optimize::Quantity(optimize_str.to_string())),
         Some((left, right)) => {
             if left != "time" {
                 return Err("Badly formatted optimize line".to_string());
             }
-            Optimize::Time(right.to_string())
+            return Ok(Optimize::Time(right.to_string()));
         }
     };
-
-    //todo, has to be an existing name
-    // if
-
-    return Err("Invalid or missing optimize".to_string());
 }

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::os::unix::process;
@@ -5,7 +6,7 @@ use std::process::exit;
 
 mod parser;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Optimize {
     Time(String),
     Quantity(String),
@@ -47,13 +48,13 @@ impl Process {
 
 #[derive(Debug)]
 pub struct Spec {
-    stocks: Vec<Stock>,
+    stocks: HashMap<String, i64>,
     processes: Vec<Process>,
     optimize: Optimize,
 }
 
 impl Spec {
-    fn new(processes: Vec<Process>, stocks: Vec<Stock>, optimize: Optimize) -> Self {
+    fn new(processes: Vec<Process>, stocks: HashMap<String, i64>, optimize: Optimize) -> Self {
         Self {
             processes,
             stocks,
