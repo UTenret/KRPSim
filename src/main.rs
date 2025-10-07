@@ -6,6 +6,12 @@ use std::process::exit;
 mod parser;
 
 #[derive(Debug)]
+pub enum Optimize {
+    Time(String),
+    Quantity(String),
+}
+
+#[derive(Debug)]
 pub struct Stock {
     name: String,
     quantity: i64,
@@ -20,7 +26,7 @@ impl Stock {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Process {
     name: String,
     needs: Vec<Stock>,
@@ -39,15 +45,20 @@ impl Process {
     }
 }
 
+#[derive(Debug)]
 pub struct Spec {
-    processes: Vec<Process>,
     stocks: Vec<Stock>,
-    // optimize: Option<Time, String>, // need optimize there too
+    processes: Vec<Process>,
+    optimize: Optimize,
 }
 
 impl Spec {
-    fn new(processes: Vec<Process>, stocks: Vec<Stock>) -> Self {
-        Self { processes, stocks }
+    fn new(processes: Vec<Process>, stocks: Vec<Stock>, optimize: Optimize) -> Self {
+        Self {
+            processes,
+            stocks,
+            optimize,
+        }
     }
 }
 
@@ -69,6 +80,8 @@ fn main() {
         eprintln!("Error while parsing the contents of the file : {}", e);
         exit(1);
     });
+
+    println!("res: {:?}", res);
 
     // println!("File contents : {}", contents.unwrap());
 
