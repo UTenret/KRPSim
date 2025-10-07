@@ -178,8 +178,6 @@ fn parse_optimize(input: &str) -> Result<Optimize, String> {
         return Err("Badly formatted optimize line".to_string());
     }
 
-    println!("opt: [{}]", optimize_str);
-
     match optimize_str.split_once(';') {
         None => return Ok(Optimize::Quantity(optimize_str.to_string())),
         Some((left, right)) => {
