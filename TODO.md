@@ -11,3 +11,10 @@ processes can take nothing or give nothing
 ## GA
 
 We can parse and know which resources are renewable and which are non-renewable
+
+## Specific problems to solve
+
+-   Processes which consumes resources and give nothing back (manger, recre)
+-   Processes with consumes resources and give back resources which we dont need or lead to an infinite loop (separation_oeuf/reunion_oeuf, pomme)
+-   Having to keep some stock to keep higher production or have production at all over long term instead of rushing (if maximizing quantity) towards goal
+-

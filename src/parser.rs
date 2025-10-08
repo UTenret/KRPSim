@@ -11,7 +11,7 @@ pub fn parse_spec(input: &str) -> Result<Spec, String> {
     let mut optimize = None;
 
     for (_, line) in input.lines().enumerate() {
-        if line.starts_with('#') {
+        if line.starts_with('#') || line.is_empty() {
             continue;
         } else if line.starts_with("optimize") {
             let opt = parse_optimize(line)?;

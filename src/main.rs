@@ -5,8 +5,11 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::process::exit;
+mod ga;
 mod parser;
 use std::cmp::{Ordering, Reverse};
+
+use crate::ga::gen_initial_pop;
 
 #[derive(Debug, Clone)]
 pub enum Optimize {
@@ -30,7 +33,7 @@ impl Stock {
 }
 
 #[derive(Debug, Clone)]
-struct Job {
+pub struct Job {
     cycles: i64,
     stock: Stock,
 }
@@ -185,13 +188,15 @@ fn main() {
 
     println!("spec: {:?}", spec);
 
-    let mut max_score = 0;
-    for _ in 1..50 {
-        let score = random_solve(spec.clone());
-        max_score = max(score, max_score);
-        println!("score: {}", score);
-    }
-    println!("max_score: {}", max_score);
+    gen_initial_pop(&spec, spec.processes.len());
+
+    // let mut max_score = 0;
+    // for _ in 1..50 {
+    //     let score = random_solve(spec.clone());
+    //     max_score = max(score, max_score);
+    //     println!("score: {}", score);
+    // }
+    // println!("max_score: {}", max_score);
 
     // let possible_actions = Vec
 
@@ -203,3 +208,20 @@ fn main() {
     //     cycle += 1;
     // }
 }
+
+/*
+
+priority order
+but
+only start process
+if outcome is needed by higher priority process
+and
+also only start process
+if you will have enough resources after
+
+
+and randomly block some process(they should never run)
+
+
+
+*/

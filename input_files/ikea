@@ -17,3 +17,10 @@ do_armoire_ikea:(montant:2;fond:1;etagere:3):(armoire:1):30
 #
 optimize:(time;armoire)
 #
+
+
+# P1 P5 P4 P3 P2
+
+# A E M F
+
+# 
