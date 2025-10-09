@@ -22,7 +22,7 @@ pub fn parse_spec(input: &str) -> Result<Spec, String> {
             let stock = parse_stock(line)?;
             stocks.insert(stock.name, stock.quantity);
         } else {
-            let process = parse_processes(line)?;
+            let process = parse_processes(processes.len(), line)?;
             processes.push(process);
         }
     }
@@ -73,7 +73,7 @@ fn parse_stock(input: &str) -> Result<Stock, String> {
     Ok(Stock::new(name, qty))
 }
 
-fn parse_processes(input: &str) -> Result<Process, String> {
+fn parse_processes(p_id: usize, input: &str) -> Result<Process, String> {
     let (name, rest) = input
         .split_once(':')
         .ok_or_else(|| "Invalid line".to_string())?;
@@ -130,7 +130,7 @@ fn parse_processes(input: &str) -> Result<Process, String> {
                 results.push(stock);
             }
 
-            return Ok(Process::new(name, needs, results, delay));
+            return Ok(Process::new(p_id, name, needs, results, delay));
         }
         1 => {
             if rest.starts_with("(") {
@@ -143,7 +143,7 @@ fn parse_processes(input: &str) -> Result<Process, String> {
                     needs.push(stock);
                 }
 
-                return Ok(Process::new(name, needs, results, delay));
+                return Ok(Process::new(p_id, name, needs, results, delay));
             } else if rest.starts_with(":") {
                 let results_str = &rest[2..rest.len() - 1];
                 let needs: Vec<Stock> = vec![];
@@ -154,7 +154,7 @@ fn parse_processes(input: &str) -> Result<Process, String> {
                     results.push(stock);
                 }
 
-                return Ok(Process::new(name, needs, results, delay));
+                return Ok(Process::new(p_id, name, needs, results, delay));
             } else {
                 return Err("Invalid line".to_string());
             }

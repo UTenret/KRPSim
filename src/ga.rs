@@ -1,15 +1,17 @@
 use std::{
     cmp::Reverse,
     collections::{BinaryHeap, HashMap},
-    i64, vec,
+    i64,
+    sync::Arc,
+    vec,
 };
 
 use rand::{self, Rng, rng, seq::SliceRandom};
 
-use crate::{Job, Optimize, Spec, Stock};
+use crate::{Job, Optimize, Process, Spec};
 
 const ELITISM_CNT: i32 = 3;
-const MAX_POPULATION: i32 = 200;
+const MAX_POPULATION: i32 = 100;
 const PERCENT_CHANCE_TO_MUTATE: f64 = 3.0;
 const MAX_CYCLES: i64 = 25000;
 
@@ -20,249 +22,215 @@ pub struct Population {
 
 #[derive(Clone)]
 pub struct Genome {
-    priority_process_q: Vec<usize>,
-    current_needs: Vec<HashMap<String, i64>>,
-    fitness: i64,
-    spec: Spec, // max_job_cnt_perc_to_total_jobs: Vec<Vec<f64>>,
+    keys: Vec<f64>,
+    pub fitness: i64,
     pending_stock_divider: i32,
+    spec: Arc<Spec>,
 }
 
 impl Genome {
-    pub fn new(
-        priority_process_q: Vec<usize>,
-        current_needs: Vec<HashMap<String, i64>>,
-        fitness: i64,
-        spec: Spec,
-        pending_stock_divider: i32,
-        //max_job_cnt_perc_to_total_jobs: Vec<Vec<f64>>,
-    ) -> Self {
+    pub fn new(keys: Vec<f64>, fitness: i64, pending_stock_divider: i32, spec: Arc<Spec>) -> Self {
         Self {
-            priority_process_q,
-            current_needs,
+            keys,
             fitness,
-            spec, // max_job_cnt_perc_to_total_jobs,
             pending_stock_divider,
+            spec,
         }
     }
+}
+
+pub struct Sim<'a> {
+    spec: &'a Spec,
+    time: i64,
+    stocks: HashMap<String, i64>,
+    running: BinaryHeap<Reverse<Job>>,
+}
+
+fn priority_from_keys(keys: &[f64]) -> Vec<usize> {
+    let mut idx: Vec<usize> = (0..keys.len()).collect();
+    idx.sort_by(|&i, &j| keys[i].total_cmp(&keys[j]));
+    idx
+}
+
+fn inputs_available(p: &Process, stocks: &HashMap<String, i64>) -> bool {
+    p.needs
+        .iter()
+        .all(|n| stocks.get(&n.name).copied().unwrap_or(0) >= n.quantity)
 }
 
 fn mutate() {}
 
 fn crossover() {}
 
-pub fn calc_fitness(pop: &mut Population) -> i64 {
-    let mut genome_nbr = 0;
-    for cand in &mut pop.candidates {
-        let mut heap: BinaryHeap<Reverse<Job>> = BinaryHeap::new();
-        let mut time = 1;
+fn deficits_for_higher_priority(
+    order: &[usize],
+    pos: usize,
+    spec: &Spec,
+    stocks: &HashMap<String, i64>,
+) -> HashMap<String, i64> {
+    let mut def = HashMap::new();
 
-        let mut needs_maps: Vec<HashMap<String, i64>> = gen_current_needs(cand);
-        let mut pending_stock: HashMap<String, i64> = Default::default();
+    for (pidx, &hp_idx) in order[..pos].iter().enumerate() {
+        let p = &spec.processes[hp_idx];
 
-        for cycles in 0..MAX_CYCLES {
-            while let Some(top) = heap.peek() {
-                if top.0.cycles == cycles {
-                    let Reverse(job) = heap.pop().unwrap();
-                    *cand.spec.stocks.entry(job.stock.name.clone()).or_insert(0) +=
-                        job.stock.quantity;
-                    if let Some(p) = pending_stock.get_mut(&job.stock.name.clone()) {
-                        *p -= job.stock.quantity;
-                        if *p <= 0 {
-                            pending_stock.remove(&job.stock.name.clone());
-                        }
-                    }
-                } else {
-                    break;
-                }
+        // eprintln!("pidx: {}", pidx);
+        if pidx == 0 {
+            for r in &p.results {
+                def.insert(r.name.clone(), i64::MAX);
             }
-
-            for (step_idx, &proc_idx) in cand.priority_process_q.iter().enumerate() {
-                // eprintln!("{:#?}", needs_maps);
-                // eprintln!("{:#?}", heap.len());
-                // eprintln!("{:#?}", cand.spec.stocks);
-                needs_maps = gen_current_needs(cand);
-                // if cycles > 5270 {
-                //     eprintln!("{:#?}", needs_maps);
-                // }
-
-                // 1) Can we run? (enough stocks for all needs)
-                let can_run = cand.spec.processes[proc_idx].needs.iter().all(|need| {
-                    let have = cand.spec.stocks.get(&need.name).copied().unwrap_or(0);
-                    have >= need.quantity
-                });
-                if !can_run {
-                    continue;
+            if let Optimize::Quantity(_) = spec.optimize {
+                for n in &p.needs {
+                    def.insert(n.name.clone(), i64::MAX);
                 }
-
-                // 2) Should we run? (any result is currently needed at this step)
-                // if the results of our proccesses
-                // if any of those produces something we need
-                // its a yes
-                let should_run = cand.spec.processes[proc_idx].results.iter().any(|res| {
-                    let have_now = cand.spec.stocks.get(&res.name).copied().unwrap_or(0)
-                        + pending_stock.get(&res.name).copied().unwrap_or(0);
-
-                    let need = needs_maps[step_idx].get(&res.name).copied().unwrap_or(0);
-
-                    // if cycles > 5270 {
-                    //     eprintln!(
-                    //         "have now of {:?} is {} and need is : {}, cycle: {}",
-                    //         &res.name, have_now, need, cycles
-                    //     );
-                    // }
-                    // need > 0
-                    // need - (pending_stock.get(&res.name).copied().unwrap_or(0) / 400) > 0
-                    // eprintln!(
-                    //     "pending {:?} for {}, need {}",
-                    //     pending_stock.get(&res.name).unwrap_or(&0),
-                    //     res.name,
-                    //     need
-                    // );
-                    need - (pending_stock.get(&res.name).copied().unwrap_or(0)
-                        / cand.pending_stock_divider as i64)
-                        > 0
-                    // need > have_now
-                });
-                // eprintln!("should_run : {}", should_run);
-                if !should_run || cand.spec.processes[proc_idx].results.is_empty() {
-                    continue;
-                }
-
-                // eprintln!("We are at cycle : {}", cycles);
-
-                // eprintln!("Building {}", cand.spec.processes[proc_idx].name);
-                // needs_maps = gen_current_needs(cand);
-                // eprintln!("{:#?}", heap.len());
-                // eprintln!("{:#?}", cand.spec.stocks);
-                // eprintln!("{:#?}", needs_maps);
-
-                for need in &cand.spec.processes[proc_idx].needs {
-                    *cand.spec.stocks.entry(need.name.clone()).or_insert(0) -= need.quantity;
-                }
-
-                for stock in &cand.spec.processes[proc_idx].results {
-                    heap.push(Reverse(Job {
-                        cycles: cand.spec.processes[proc_idx].delay + cycles,
-                        stock: stock.clone(),
-                    }));
-                    *pending_stock.entry(stock.name.clone()).or_insert(0) += stock.quantity;
-                }
-            }
-
-            if heap.is_empty() {
-                time = cycles;
-                break;
             }
         }
-        // eprintln!("{:#?}", cand.spec.stocks);
-        let looking_for = match &cand.spec.optimize {
-            Optimize::Time(s) | Optimize::Quantity(s) => s.as_str(),
-        };
-        for stock in &cand.spec.stocks {
-            if stock.0 == looking_for {
-                cand.fitness = *stock.1;
-                // cand.fitness = *stock.1 / time;
-                println!(
-                    "Candidate {} => fitness before dividing {}, after : {} for stock: {} with time: {}",
-                    genome_nbr, stock.1, cand.fitness, stock.0, time
-                );
-            }
-        }
-        genome_nbr += 1;
-    }
-    0
-}
 
-fn gen_rand_prio_process_q(n: usize) -> Vec<usize> {
-    let mut v: Vec<usize> = (0..n).collect();
-    v.shuffle(&mut rand::rng());
-    v
-    // vec![7, 6, 5, 4, 3, 2, 1, 0]
-    // vec![13, 12, 14, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
-}
-
-/*
-needs for max prio is itself
-otherwise going down its the list of stock needed by previous + previous itself
-*/
-
-fn gen_current_needs(cand: &Genome) -> Vec<HashMap<String, i64>> {
-    let n = cand.spec.processes.len();
-    let mut current_needs: Vec<HashMap<String, i64>> = Vec::with_capacity(n);
-    current_needs.resize_with(n, HashMap::new);
-    // first prio has itself
-
-    let mut prev_proc_idx: usize = 0;
-    for (c_needs_idx, &proc_idx) in cand.priority_process_q.iter().enumerate() {
-        if c_needs_idx == 0 {
-            for final_prod in &cand.spec.processes[*&proc_idx].results {
-                current_needs[c_needs_idx].insert(final_prod.name.clone(), i64::MAX);
-            }
-            if let Optimize::Quantity(_) = &cand.spec.optimize {
-                // eprintln!("{:?}", cand.spec.optimize);
-                for final_prod in &cand.spec.processes[*&proc_idx].needs {
-                    current_needs[c_needs_idx].insert(final_prod.name.clone(), i64::MAX);
-                }
-            }
-
-            prev_proc_idx = proc_idx;
+        let blocked_by_inventory = p
+            .needs
+            .iter()
+            .any(|n| stocks.get(&n.name).copied().unwrap_or(0) < n.quantity);
+        if !blocked_by_inventory {
             continue;
         }
 
-        // eprintln!("{}", c_needs_idx);
-        current_needs[c_needs_idx] = current_needs[c_needs_idx - 1].clone();
-
-        for need in &cand.spec.processes[prev_proc_idx].needs {
-            let have = cand.spec.stocks.get(&need.name).copied().unwrap_or(0);
-            let deficit = need.quantity - have;
-            // eprintln!("deficit for {} is : {}", need.name, deficit);
+        for n in &p.needs {
+            let have = stocks.get(&n.name).copied().unwrap_or(0);
+            let deficit = n.quantity - have;
             if deficit > 0 {
-                current_needs[c_needs_idx]
-                    .entry(need.name.clone())
-                    .and_modify(|v| {
+                def.entry(n.name.clone())
+                    .and_modify(|v: &mut i64| {
                         if *v != i64::MAX {
-                            *v += deficit
+                            *v = v.saturating_add(deficit);
                         }
                     })
                     .or_insert(deficit);
             }
-            // eprintln!(
-            //     "current_needs[c_needs_idx]
-            //         .entry(need.name.clone()) {:?} ",
-            //     current_needs[c_needs_idx].entry(need.name.clone())
-            // );
         }
-        prev_proc_idx = proc_idx;
     }
-    current_needs
+    // eprintln!("current def : {:?}", def);
+    def
 }
 
-pub fn gen_pending_stock_divider() -> i32 {
+pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> i64 {
+    let order = priority_from_keys(&cand.keys);
+
+    let mut s = Sim {
+        spec: &cand.spec.as_ref(),
+        time: 0,
+        stocks: cand.spec.init_stocks.clone(),
+        running: BinaryHeap::new(),
+    };
+
+    let mut pending: HashMap<String, i64> = HashMap::new();
+
+    let target = match &s.spec.optimize {
+        Optimize::Quantity(name) | Optimize::Time(name) => name.as_str(),
+    };
+
+    while s.time < horizon {
+        for (pos, &pid) in order.iter().enumerate() {
+            let p = &s.spec.processes[pid];
+            // eprintln!("pos: {}, pid: {}, pname: {}", pos, pid, p.name);
+            // eprintln!("current_stocks: {:?}", s.stocks);
+
+            if !inputs_available(p, &s.stocks) {
+                continue;
+            }
+
+            let deficit = deficits_for_higher_priority(&order, pos + 1, &s.spec, &s.stocks);
+            let should_run = p.results.iter().any(|r| {
+                deficit.get(&r.name).copied().unwrap_or(0)
+                    > (pending.get(&r.name).copied().unwrap_or(0)
+                        / cand.pending_stock_divider as i64)
+            });
+
+            if !should_run || p.results.is_empty() {
+                continue;
+            }
+
+            for n in &p.needs {
+                *s.stocks.entry(n.name.clone()).or_insert(0) -= n.quantity;
+            }
+
+            s.running.push(Reverse(Job {
+                finish_time: s.time + p.delay,
+                proc_id: pid,
+                results: p.results.clone(),
+            }));
+
+            for r in &p.results {
+                *pending.entry(r.name.clone()).or_insert(0) += r.quantity;
+            }
+        }
+
+        if let Some(Reverse(top)) = s.running.peek() {
+            let t_next = top.finish_time;
+
+            s.time = t_next;
+
+            while let Some(Reverse(job)) = s.running.peek() {
+                if job.finish_time != t_next {
+                    break;
+                }
+                let Reverse(job) = s.running.pop().unwrap();
+
+                for r in job.results.iter() {
+                    *s.stocks.entry(r.name.clone()).or_insert(0) += r.quantity;
+                    let e = pending.entry(r.name.clone()).or_insert(0);
+                    *e -= r.quantity;
+                    if *e <= 0 {
+                        pending.remove(&r.name);
+                    }
+                }
+            }
+        } else {
+            break;
+        }
+    }
+
+    let fit = *s.stocks.get(target).unwrap_or(&0);
+    // eprintln!("{:?}", s.stocks);
+    // eprintln!("target : {}", target);
+    cand.fitness = fit;
+    fit
+}
+
+fn gen_pending_stock_divider() -> i32 {
     rand::rng().random_range(1..500)
 }
 
-pub fn gen_initial_pop(spec: &Spec, process_nbr: usize) -> Population {
+fn gen_random_keys(n: usize) -> Vec<f64> {
+    let mut random_keys: Vec<f64> = vec![];
+    for _ in 0..n {
+        random_keys.push(rng().random::<f64>());
+    }
+    random_keys
+}
+
+pub fn gen_initial_pop(spec: Arc<Spec>, process_nbr: usize) -> Population {
     let mut pop: Population = Default::default();
     for _ in 0..MAX_POPULATION {
-        let prio_process_q = gen_rand_prio_process_q(process_nbr);
+        let random_keys = gen_random_keys(process_nbr);
         let divider = gen_pending_stock_divider();
-        println!("prio_process_q: {:?}", prio_process_q);
-        let cand: Genome = Genome::new(prio_process_q, vec![], 0, spec.clone(), divider);
+        println!("prio_process_q: {:?}", random_keys);
+        let cand: Genome = Genome::new(random_keys, 0, divider, spec.clone());
         pop.candidates.push(cand);
     }
-    eprintln!("{:.2}", rng().random::<f64>());
     pop
 }
 
 pub fn run_ga(mut pop: Population) -> Genome {
-    calc_fitness(&mut pop);
+    for (index, genome) in pop.candidates.iter_mut().enumerate() {
+        let fit = eval_fitness(genome, MAX_CYCLES);
+        eprintln!("Genome {} has {} fitness.", index, fit);
+    }
 
     let mut best = pop
         .candidates
         .iter()
         .max_by_key(|c| c.fitness)
-        // .unwrap()
+        .unwrap()
         .clone();
 
-    best.unwrap().clone()
+    best
 }
