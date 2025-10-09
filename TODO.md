@@ -10,7 +10,10 @@ processes can take nothing or give nothing
 
 ## GA
 
-We can parse and know which resources are renewable and which are non-renewable
+We can parse and know which resources are renewable and which are non-renewable.
+
+We need random keys, sorted processes directly in genome.
+Crossover & mutation for keys & divider.
 
 ## Specific problems to solve
 

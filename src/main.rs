@@ -9,7 +9,9 @@ mod ga;
 mod parser;
 use std::cmp::{Ordering, Reverse};
 
+use crate::ga::calc_fitness;
 use crate::ga::gen_initial_pop;
+use crate::ga::run_ga;
 
 #[derive(Debug, Clone)]
 pub enum Optimize {
@@ -188,7 +190,9 @@ fn main() {
 
     println!("spec: {:?}", spec);
 
-    gen_initial_pop(&spec, spec.processes.len());
+    let mut pop = gen_initial_pop(&spec, spec.processes.len());
+
+    let best = run_ga(pop);
 
     // let mut max_score = 0;
     // for _ in 1..50 {
