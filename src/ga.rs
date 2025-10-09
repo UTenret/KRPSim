@@ -108,7 +108,7 @@ fn calc_fitness(pop: &mut Population) -> i64 {
         for stock in &cand.spec.stocks {
             if stock.0 == looking_for {
                 println!(
-                    "Genome {} => fitness {} for stock: {} with time: {}",
+                    "Candidate {} => fitness {} for stock: {} with time: {}",
                     genome_nbr, stock.1, stock.0, time
                 );
             }
@@ -125,10 +125,8 @@ fn gen_rand_prio_process_q(n: usize) -> Vec<usize> {
 }
 
 /*
-
 needs for max prio is itself
 otherwise going down its the list of stock needed by previous + previous itself
-
 */
 
 fn gen_current_needs(cand: &Genome) -> Vec<HashMap<String, i64>> {
@@ -143,6 +141,7 @@ fn gen_current_needs(cand: &Genome) -> Vec<HashMap<String, i64>> {
             for final_prod in &cand.spec.processes[*&proc_idx].results {
                 current_needs[c_needs_idx].insert(final_prod.name.clone(), i64::MAX);
             }
+            prev_proc_idx = proc_idx;
             continue;
         }
 
@@ -175,7 +174,6 @@ pub fn gen_initial_pop(spec: &Spec, process_nbr: usize) {
         println!("prio_process_q: {:?}", prio_process_q);
         let cand: Genome = Genome::new(prio_process_q, vec![], 0, spec.clone());
         pop.candidates.push(cand);
-        // let cand: Genome = Genome::new(priority_process_q, max_job_cnt_perc_to_total_jobs);
     }
     calc_fitness(&mut pop);
 }
