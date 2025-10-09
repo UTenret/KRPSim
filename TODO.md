@@ -18,3 +18,9 @@ We can parse and know which resources are renewable and which are non-renewable
 -   Processes with consumes resources and give back resources which we dont need or lead to an infinite loop (separation_oeuf/reunion_oeuf, pomme)
 -   Having to keep some stock to keep higher production or have production at all over long term instead of rushing (if maximizing quantity) towards goal
 -
+
+### Summary
+
+-   loop
+-   dead process
+-   inefficient producer
