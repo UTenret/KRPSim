@@ -25,10 +25,10 @@ pub struct Population {
 
 #[derive(Clone)]
 pub struct Genome {
-    keys: Vec<f64>,
+    pub keys: Vec<f64>,
     pub fitness: i64,
-    pending_stock_divider: i32,
-    spec: Arc<Spec>,
+    pub pending_stock_divider: i32,
+    pub spec: Arc<Spec>,
 }
 
 impl Genome {
@@ -188,8 +188,6 @@ pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> i64 {
     }
 
     let fit = *s.stocks.get(target).unwrap_or(&0);
-    // eprintln!("{:?}", s.stocks);
-    // eprintln!("target : {}", target);
     cand.fitness = fit;
     fit
 }

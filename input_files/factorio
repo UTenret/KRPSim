@@ -2,10 +2,10 @@
 #
 # stock      name:quantity
 pickaxe:1
-stone:0
-iron:0
-copper:0
-coal:0
+stone:20
+iron:20
+copper:20
+coal:20
 iron_plate:0
 copper_plate:0
 stone_furnace:0
@@ -14,12 +14,13 @@ gear:0
 copper_cable:0
 electronic_circuit:0
 assembling_machine:0
+moi:1
 
 
-mine_stone_1:(pickaxe:1):(pickaxe:1;stone:1):1
-mine_iron_1:(pickaxe:1):(pickaxe:1;iron:1):1
-mine_copper_1:(pickaxe:1):(pickaxe:1;copper:1):1
-mine_coal_1:(pickaxe:1):(pickaxe:1;coal:1):1
+mine_stone_1:(moi:1;pickaxe:1):(moi:1;pickaxe:1;stone:1):1
+mine_iron_1:(moi:1;pickaxe:1):(moi:1;pickaxe:1;iron:1):1
+mine_copper_1:(moi:1;pickaxe:1):(moi:1;pickaxe:1;copper:1):1
+mine_coal_1:(moi:1;pickaxe:1):(moi:1;pickaxe:1;coal:1):1
 
 mine_stone_2:(burner_mining_drill:1;coal:1):(burner_mining_drill:1;stone:7):2
 mine_iron_2:(burner_mining_drill:1;coal:1):(burner_mining_drill:1;iron:7):2
@@ -29,11 +30,12 @@ mine_coal_2:(burner_mining_drill:1;coal:1):(burner_mining_drill:1;coal:7):2
 smelt_iron_1:(stone_furnace:1;coal:1):(stone_furnace:1;iron_plate:5):3
 smelt_copper_1:(stone_furnace:1;coal:1):(stone_furnace:1;copper_plate:5):3
 
-craft_copper_cable:(copper_plate:2):(copper_cable:4):1
-craft_gear:(iron_plate:4):(gear:2):1
-craft_electronic_circuit:(copper_cable:6;iron_plate:1):(electronic_circuit:2):1
+craft_copper_cable:(moi:1;copper_plate:2):(moi:1;copper_cable:4):1
+craft_gear:(moi:1;iron_plate:4):(moi:1;gear:2):1
+craft_electronic_circuit:(moi:1;copper_cable:6;iron_plate:1):(moi:1;electronic_circuit:2):1
 
-build_stone_furnace:(stone:5):(stone_furnace:1):5
-build_assembling_machine:(green_circuit:3;gear:5;iron_plate:9):(assembling_machine:1):1
+build_stone_furnace:(moi:1;stone:5):(moi:1;stone_furnace:1):5
+build_burner_mining_drill:(moi:1;gear:3;iron_plate:3;stone_furnace:1):(moi:1;burner_mining_drill:1):2
+build_assembling_machine:(moi:1;electronic_circuit:3;gear:5;iron_plate:9):(moi:1;assembling_machine:1):1
 
 optimize:(electronic_circuit)
