@@ -4,5 +4,5 @@
 
 -   pomme: 298130
 -   recre: 68
--   year: 25
--   factorio: 6054
+-   year: 25 (optimal)
+-   factorio: 7980
