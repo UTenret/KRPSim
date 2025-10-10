@@ -1,5 +1,6 @@
 # A factorio inspired scenario
 #
+# goal is to start with 0 stocks and for it to work (besides pickaxe and moi obviously)
 # stock      name:quantity
 pickaxe:1
 stone:20
