@@ -117,6 +117,10 @@ fn main() {
         exit(1);
     });
 
+    if spec.processes.is_empty() {
+        println!("No process worth starting!");
+    }
+
     println!("spec: {:?}", spec);
 
     let spec_arc = Arc::new(spec.clone());

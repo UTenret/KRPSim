@@ -22,8 +22,10 @@ pub fn parse_spec(input: &str) -> Result<Spec, String> {
             let stock = parse_stock(line_nbr, line)?;
             stocks.insert(stock.name, stock.quantity);
         } else {
-            let process = parse_processes(line_nbr, processes.len(), line)?;
-            processes.push(process);
+            let process = parse_process(line_nbr, processes.len(), line)?;
+            if !process.results.is_empty() {
+                processes.push(process);
+            }
         }
     }
 
@@ -72,7 +74,7 @@ fn parse_stock(line_nbr: usize, input: &str) -> Result<Stock, String> {
     Ok(Stock::new(name, qty))
 }
 
-fn parse_processes(line_nbr: usize, p_id: usize, input: &str) -> Result<Process, String> {
+fn parse_process(line_nbr: usize, p_id: usize, input: &str) -> Result<Process, String> {
     let (name, rest) = input
         .split_once(':')
         .ok_or_else(|| "Invalid line".to_string())?;
