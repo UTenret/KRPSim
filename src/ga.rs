@@ -9,7 +9,7 @@ use std::{
 use rand::{self, Rng, SeedableRng, rng, rngs::SmallRng};
 use rayon::prelude::*;
 
-use crate::logger::{Logger};
+use crate::logger::Logger;
 use crate::{Job, Optimize, Process, Spec};
 
 const _ELITISM_CNT: i32 = 2;
@@ -124,16 +124,16 @@ pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> i64 {
     };
 
     let mut pending: HashMap<String, i64> = HashMap::new();
-    let mut logger = Logger::new(&s.stocks, "stock_evolution.csv");
+    // let mut logger = Logger::new(&s.stocks, "stock_evolution.csv");
 
     let target = match &s.spec.optimize {
         Optimize::Quantity(name) | Optimize::Time(name) => name.as_str(),
     };
 
     while s.time < horizon {
-        if DEBUG_WRITE_MODE {
-            logger.log_stocks(s.time, &s.stocks);
-        }
+        // if DEBUG_WRITE_MODE {
+        //     logger.log_stocks(s.time, &s.stocks);
+        // }
         for (pos, &pid) in order.iter().enumerate() {
             let p = &s.spec.processes[pid];
 
