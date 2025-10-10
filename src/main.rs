@@ -122,7 +122,7 @@ fn main() {
     let spec_arc = Arc::new(spec.clone());
     let pop = gen_initial_pop(spec_arc, spec.processes.len());
 
-    let best = run_ga(pop);
+    let best = run_ga(pop, 50);
 
     eprintln!("Best genome has {} fitness", best.fitness);
 
