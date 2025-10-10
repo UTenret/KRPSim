@@ -2,7 +2,7 @@
 
 ### 10_000 cycles current upper bounds
 
--   pomme: 290100
+-   pomme: 298130
 -   recre: 68
 -   year: 25
 -   factorio: 6054
