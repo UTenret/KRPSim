@@ -10,7 +10,7 @@ pub fn parse_spec(input: &str) -> Result<Spec, String> {
     let mut stocks: HashMap<String, i64> = Default::default();
     let mut optimize = None;
 
-    for (_, line) in input.lines().enumerate() {
+    for (line_nbr, line) in input.lines().enumerate() {
         if line.starts_with('#') || line.is_empty() {
             continue;
         } else if line.starts_with("optimize") {
@@ -19,10 +19,10 @@ pub fn parse_spec(input: &str) -> Result<Spec, String> {
                 return Err("Multiples optimize lines".to_string());
             }
         } else if !line.contains('(') {
-            let stock = parse_stock(line)?;
+            let stock = parse_stock(line_nbr, line)?;
             stocks.insert(stock.name, stock.quantity);
         } else {
-            let process = parse_processes(processes.len(), line)?;
+            let process = parse_processes(line_nbr, processes.len(), line)?;
             processes.push(process);
         }
     }
@@ -51,11 +51,10 @@ pub fn parse_spec(input: &str) -> Result<Spec, String> {
     Ok(Spec::new(processes, stocks, optimize.unwrap()))
 }
 
-fn parse_stock(input: &str) -> Result<Stock, String> {
-    // todo add line number to error
+fn parse_stock(line_nbr: usize, input: &str) -> Result<Stock, String> {
     let (name, qty_str) = input
         .split_once(':')
-        .ok_or_else(|| "Invalid line".to_string())?;
+        .ok_or_else(|| "Invalid line".to_string() + " " + &line_nbr.to_string())?;
 
     if qty_str.contains(':') {
         return Err("Too many \':\' for stock line".to_string());
@@ -73,7 +72,7 @@ fn parse_stock(input: &str) -> Result<Stock, String> {
     Ok(Stock::new(name, qty))
 }
 
-fn parse_processes(p_id: usize, input: &str) -> Result<Process, String> {
+fn parse_processes(line_nbr: usize, p_id: usize, input: &str) -> Result<Process, String> {
     let (name, rest) = input
         .split_once(':')
         .ok_or_else(|| "Invalid line".to_string())?;
@@ -119,14 +118,14 @@ fn parse_processes(p_id: usize, input: &str) -> Result<Process, String> {
             let mut needs: Vec<Stock> = vec![];
 
             for pair in needs_str.split(';') {
-                let stock = parse_stock(pair)?;
+                let stock = parse_stock(line_nbr, pair)?;
                 needs.push(stock);
             }
 
             let mut results: Vec<Stock> = vec![];
 
             for pair in results_str.split(';') {
-                let stock = parse_stock(pair)?;
+                let stock = parse_stock(line_nbr, pair)?;
                 results.push(stock);
             }
 
@@ -139,7 +138,7 @@ fn parse_processes(p_id: usize, input: &str) -> Result<Process, String> {
                 let results: Vec<Stock> = vec![];
 
                 for pair in needs_str.split(';') {
-                    let stock = parse_stock(pair)?;
+                    let stock = parse_stock(line_nbr, pair)?;
                     needs.push(stock);
                 }
 
@@ -150,7 +149,7 @@ fn parse_processes(p_id: usize, input: &str) -> Result<Process, String> {
                 let mut results: Vec<Stock> = vec![];
 
                 for pair in results_str.split(';') {
-                    let stock = parse_stock(pair)?;
+                    let stock = parse_stock(line_nbr, pair)?;
                     results.push(stock);
                 }
 

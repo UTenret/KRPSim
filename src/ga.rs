@@ -14,7 +14,7 @@ use crate::{Job, Optimize, Process, Spec};
 const ELITISM_CNT: i32 = 2;
 const TOP_PCT: i32 = 10;
 const BOT_PCT: i32 = 90;
-const MAX_POPULATION: usize = 1200;
+const MAX_POPULATION: usize = 120;
 const PERCENT_CHANCE_TO_MUTATE: f64 = 3.0;
 const MAX_CYCLES: i64 = 10000;
 
