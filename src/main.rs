@@ -4,6 +4,7 @@ use std::fs;
 use std::process::exit;
 mod ga;
 mod parser;
+mod logger;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -126,7 +127,7 @@ fn main() {
     let spec_arc = Arc::new(spec.clone());
     let pop = gen_initial_pop(spec_arc, spec.processes.len());
 
-    let best = run_ga(pop, 500);
+    let best = run_ga(pop, 50);
 
     eprintln!("Best genome has {} fitness", best.fitness);
 

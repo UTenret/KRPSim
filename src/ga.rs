@@ -9,6 +9,7 @@ use std::{
 use rand::{self, Rng, SeedableRng, TryRngCore, rng, rngs::SmallRng, seq::SliceRandom};
 use rayon::prelude::*;
 
+use crate::logger::{Logger};
 use crate::{Job, Optimize, Process, Spec};
 
 const ELITISM_CNT: i32 = 2;
@@ -17,6 +18,7 @@ const BOT_PCT: i32 = 90;
 const MAX_POPULATION: usize = 120;
 const PERCENT_CHANCE_TO_MUTATE: f64 = 3.0;
 const MAX_CYCLES: i64 = 10000;
+const DEBUG_WRITE_MODE: bool = true;
 
 #[derive(Default)]
 pub struct Population {
@@ -121,16 +123,18 @@ pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> i64 {
     };
 
     let mut pending: HashMap<String, i64> = HashMap::new();
+    let mut logger = Logger::new(&s.stocks, "stock_evolution.csv");
 
     let target = match &s.spec.optimize {
         Optimize::Quantity(name) | Optimize::Time(name) => name.as_str(),
     };
 
     while s.time < horizon {
+        if DEBUG_WRITE_MODE {
+            logger.log_stocks(s.time, &s.stocks);
+        }
         for (pos, &pid) in order.iter().enumerate() {
             let p = &s.spec.processes[pid];
-            // eprintln!("pos: {}, pid: {}, pname: {}", pos, pid, p.name);
-            // eprintln!("current_stocks: {:?}", s.stocks);
 
             if !inputs_available(p, &s.stocks) {
                 continue;
@@ -279,5 +283,6 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
         }
     }
 
+    eval_fitness(&mut best, MAX_CYCLES);
     best
 }
