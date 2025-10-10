@@ -39,4 +39,9 @@ build_stone_furnace:(moi:1;stone:5):(moi:1;stone_furnace:1):5
 build_burner_mining_drill:(moi:1;gear:3;iron_plate:3;stone_furnace:1):(moi:1;burner_mining_drill:1):2
 build_assembling_machine:(moi:1;electronic_circuit:3;gear:5;iron_plate:9):(moi:1;assembling_machine:1):1
 
+assemble_electronic_circuit:(assembling_machine:1;copper_cable:6;iron_plate:1):(assembling_machine:1;electronic_circuit:2):1
+assemble_stone_furnace:(assembling_machine:1;stone:5):(assembling_machine:1;stone_furnace:1):5
+assemble_burner_mining_drill:(assembling_machine:1;stone:5):(assembling_machine:1;burner_mining_drill:1):5
+
+
 optimize:(electronic_circuit)

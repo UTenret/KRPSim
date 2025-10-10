@@ -6,16 +6,17 @@ use std::{
     vec,
 };
 
-use rand::{self, Rng, SeedableRng, TryRngCore, rng, rngs::SmallRng, seq::SliceRandom};
+use rand::{self, Rng, SeedableRng, rng, rngs::SmallRng};
 use rayon::prelude::*;
 
 use crate::logger::{Logger};
 use crate::{Job, Optimize, Process, Spec};
 
-const ELITISM_CNT: i32 = 2;
-const TOP_PCT: i32 = 10;
-const BOT_PCT: i32 = 90;
-const MAX_POPULATION: usize = 120;
+const _ELITISM_CNT: i32 = 2;
+const TOP_PCT: f64 = 0.10;
+const BOT_PCT: f64 = 0.4;
+const HEAD_PCT: f64 = 0.7;
+const MAX_POPULATION: usize = 40;
 const PERCENT_CHANCE_TO_MUTATE: f64 = 3.0;
 const MAX_CYCLES: i64 = 10000;
 const DEBUG_WRITE_MODE: bool = true;
@@ -229,6 +230,50 @@ pub fn gen_initial_pop(spec: Arc<Spec>, process_nbr: usize) -> Population {
 
 fn _mutate(_cand: &mut Genome) {}
 
+fn crossover(p1: &Genome, p2: &Genome) -> Genome {
+    let mut keys: Vec<f64> = vec![];
+    let divider: i32;
+    for (k_n, k) in p1.keys.iter().enumerate() {
+        let r = rng().random::<f64>();
+        if r < HEAD_PCT {
+            keys.push(p1.keys[k_n]);
+        } else {
+            keys.push(p2.keys[k_n]);
+        }
+    }
+
+    let r = rng().random::<f64>();
+    if r < HEAD_PCT {
+        divider = p1.pending_stock_divider;
+    } else {
+        divider = p2.pending_stock_divider;
+    }
+    Genome::new(keys, 0, divider, p1.spec.clone())
+}
+
+fn pick_parents<'a>(sorted: &'a [Genome], elite_cnt: usize) -> (&'a Genome, &'a Genome) {
+    let mut rng = rand::rng();
+    let ec = elite_cnt.clamp(1, MAX_POPULATION);
+
+    let i_elite = rng.random_range(0..ec);
+
+    if ec < MAX_POPULATION {
+        let i_other = rng.random_range(ec..MAX_POPULATION);
+        (&sorted[i_elite], &sorted[i_other])
+    } else {
+        let i_other = if MAX_POPULATION > 1 {
+            let mut j = rng.random_range(0..MAX_POPULATION);
+            if j == i_elite {
+                j = (j + 1) % MAX_POPULATION;
+            }
+            j
+        } else {
+            0
+        };
+        (&sorted[i_elite], &sorted[i_other])
+    }
+}
+
 pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
     for (_index, genome) in pop.candidates.iter_mut().enumerate() {
         let _ = eval_fitness(genome, MAX_CYCLES);
@@ -251,11 +296,28 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
         );
         pop.candidates.sort_by_key(|g| std::cmp::Reverse(g.fitness));
 
+        let elite_cnt = (TOP_PCT * MAX_POPULATION as f64) as usize;
+
+        let bot_cnt = ((BOT_PCT * MAX_POPULATION as f64).round() as usize).clamp(1, MAX_POPULATION);
+
+        let survivors_end = MAX_POPULATION.saturating_sub(bot_cnt).max(elite_cnt);
+
         let mut next: Vec<Genome> = Vec::with_capacity(MAX_POPULATION as usize);
 
-        let elite_cnt = (ELITISM_CNT as usize).min(pop.candidates.len());
-        for i in 0..elite_cnt {
-            next.push(pop.candidates[i].clone());
+        next.extend(pop.candidates.iter().take(elite_cnt).cloned());
+
+        // eprintln!("sE : {}", survivors_end);
+        // eprintln!("next.len() : {}", next.len());
+        // eprintln!("elite_cnt : {}", elite_cnt);
+
+        while next.len() < survivors_end {
+            let (p1, p2) = pick_parents(&pop.candidates, elite_cnt);
+            let child = crossover(p1, p2);
+            // eprintln!(
+            // "p1 keys: {:?}, p2 keys: {:?}, child keys: {:?}",
+            // p1.keys, p2.keys, child.keys
+            // );
+            next.push(child);
         }
 
         while next.len() < MAX_POPULATION {

@@ -165,4 +165,23 @@ and randomly block some process(they should never run)
 
 
 
+wait time per process
+
+before that, crossover
+
+we take the top 15% as is
+we crossover top 15% with bottom 85% to create
+top% - bot%(new random) == 65%
+
+we take some process from the top 15%, cross it with
+
+
+
+cut one or more providers
+
+then cut every useless gainer
+
+
+
+
 */

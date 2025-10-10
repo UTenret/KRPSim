@@ -27,3 +27,10 @@ Crossover & mutation for keys & divider.
 -   loop
 -   dead process
 -   inefficient producer
+
+### algo
+
+do tau, it effectively is the same as potentially removing processes as well
+if max dur is longest process \* 1.5
+last process with high tau could wait forever
+tau vector, any process could then be effectively locked out
