@@ -1,12 +1,17 @@
 # A factorio inspired scenario
 #
+
+
+# Drain – The energy consumed by the machine whether it is active or not.
+# so once you have built an assembly machine you lose power
+
 # goal is to start with 0 stocks and for it to work (besides pickaxe and moi obviously)
 # stock      name:quantity
 pickaxe:1
-stone:20
-iron:20
-copper:20
-coal:20
+stone:0
+iron:0
+copper:0
+coal:0
 iron_plate:0
 copper_plate:0
 stone_furnace:0
@@ -15,7 +20,15 @@ gear:0
 copper_cable:0
 electronic_circuit:0
 assembling_machine:0
+electricity_kw:0
+water:0
 moi:1
+
+# useless   
+gun_turret:0
+
+### PROCESSES
+
 
 ## hand mining
 
@@ -23,6 +36,15 @@ mine_stone_1:(moi:1;pickaxe:1):(moi:1;pickaxe:1;stone:1):1
 mine_iron_1:(moi:1;pickaxe:1):(moi:1;pickaxe:1;iron:1):1
 mine_copper_1:(moi:1;pickaxe:1):(moi:1;pickaxe:1;copper:1):1
 mine_coal_1:(moi:1;pickaxe:1):(moi:1;pickaxe:1;coal:1):1
+
+
+# pumping
+
+pump_water:(offshore_pump:1):(offshore_pump:1;water:1560):1
+
+# generating electricity
+
+generate_electricity_1:(boiler:1;steam_engine:2;water:46;coal:1):(boiler:1;steam_engine:2;electricity_kw:1170):5
 
 # burner drill mining
 
@@ -40,6 +62,7 @@ smelt_copper_1:(stone_furnace:1;coal:1):(stone_furnace:1;copper_plate:5):3
 
 craft_copper_cable:(moi:1;copper_plate:2):(moi:1;copper_cable:4):1
 craft_gear:(moi:1;iron_plate:4):(moi:1;gear:2):1
+craft_pipe:(moi:1;iron_plate:2):(moi:1;pipe:2):1
 craft_electronic_circuit:(moi:1;copper_cable:6;iron_plate:1):(moi:1;electronic_circuit:2):1
 
 # hand building
@@ -47,12 +70,17 @@ craft_electronic_circuit:(moi:1;copper_cable:6;iron_plate:1):(moi:1;electronic_c
 build_stone_furnace:(moi:1;stone:5):(moi:1;stone_furnace:1):5
 build_burner_mining_drill:(moi:1;gear:3;iron_plate:3;stone_furnace:1):(moi:1;burner_mining_drill:1):2
 build_assembling_machine:(moi:1;electronic_circuit:3;gear:5;iron_plate:9):(moi:1;assembling_machine:1):1
+build_steam_engine:(moi:1;gear:16;iron_plate:10;pipe:5):(moi:1;steam_engine:2):1
+build_boiler:(moi:1;pipe:8;stone_furnace:2):(boiler:2):1
+build_offshore_pump:(moi:1;gear:4;pipe:6):(moi:1;offshore_pump:1):1
+
+build_gun_turret:(moi:1;copper_plate:10;gear:10;iron_plate:20):(moi:1;gun_turret:1):8
 
 # assembling
 
-assemble_electronic_circuit:(assembling_machine:1;copper_cable:6;iron_plate:1):(assembling_machine:1;electronic_circuit:2):1
-assemble_stone_furnace:(assembling_machine:1;stone:5):(assembling_machine:1;stone_furnace:1):5
-assemble_burner_mining_drill:(assembling_machine:1;stone:5):(assembling_machine:1;burner_mining_drill:1):5
+assemble_electronic_circuit:(assembling_machine:1;copper_cable:6;iron_plate:1;electricity_kw:75):(assembling_machine:1;electronic_circuit:2):1
+assemble_stone_furnace:(assembling_machine:1;stone:5;electricity_kw:375):(assembling_machine:1;stone_furnace:1):5
+assemble_burner_mining_drill:(assembling_machine:1;stone:5;electricity_kw:375):(assembling_machine:1;burner_mining_drill:1):5
 
 
 optimize:(electronic_circuit)

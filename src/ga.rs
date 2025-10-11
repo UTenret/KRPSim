@@ -113,7 +113,7 @@ fn deficits_for_higher_priority(
     def
 }
 
-pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> i64 {
+pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> (i64, Sim) {
     let order = priority_from_keys(&cand.keys);
 
     let mut s = Sim {
@@ -194,7 +194,7 @@ pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> i64 {
 
     let fit = *s.stocks.get(target).unwrap_or(&0);
     cand.fitness = fit;
-    fit
+    (fit, s)
 }
 
 fn gen_pending_stock_divider() -> i32 {
@@ -343,8 +343,11 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
                 best = cur_best.clone();
             }
         }
+        let (_, s) =eval_fitness(&mut best, MAX_CYCLES);
+        eprintln!("stocks of best : {:?}", s.stocks);
     }
 
-    eval_fitness(&mut best, MAX_CYCLES);
+    let (_, s) =eval_fitness(&mut best, MAX_CYCLES);
+    eprintln!("stocks of best overall : {:?}", s.stocks);
     best
 }
