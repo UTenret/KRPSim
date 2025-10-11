@@ -32,6 +32,7 @@ pub struct Genome {
     pub fitness: i64,
     pub pending_stock_divider: i32,
     pub spec: Arc<Spec>,
+    // pub wait_cycles: Vec<i64>,
 }
 
 impl Genome {
