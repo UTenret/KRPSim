@@ -1,9 +1,5 @@
 use std::{
-    cmp::Reverse,
-    collections::{BinaryHeap, HashMap},
-    i64,
-    sync::Arc,
-    vec,
+    cmp::Reverse, collections::{BinaryHeap, HashMap}, hash::Hash, i64, process::exit, sync::Arc, vec
 };
 
 use rand::{self, Rng, SeedableRng, rng, rngs::SmallRng};
@@ -32,16 +28,21 @@ pub struct Genome {
     pub fitness: i64,
     pub pending_stock_divider: i32,
     pub spec: Arc<Spec>,
-    // pub wait_cycles: Vec<i64>,
+    pub no_delay: bool,
+    pub disabled_processes: bool,
+    pub wait_cycles: Vec<i64>,
 }
 
 impl Genome {
-    pub fn new(keys: Vec<f64>, fitness: i64, pending_stock_divider: i32, spec: Arc<Spec>) -> Self {
+    pub fn new(keys: Vec<f64>, fitness: i64, pending_stock_divider: i32, spec: Arc<Spec>, no_delay: bool, disabled_processes:bool, wait_cycles: Vec<i64>) -> Self {
         Self {
             keys,
             fitness,
             pending_stock_divider,
             spec,
+            no_delay,
+            disabled_processes,
+            wait_cycles
         }
     }
 }
@@ -136,6 +137,10 @@ pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> (i64, Sim) {
         //     logger.log_stocks(s.time, &s.stocks);
         // }
         for (pos, &pid) in order.iter().enumerate() {
+            if cand.keys[pos] == 1.0 {
+                continue;
+            }
+
             let p = &s.spec.processes[pid];
 
             if !inputs_available(p, &s.stocks) {
@@ -214,10 +219,36 @@ fn gen_random_keys(n: usize) -> Vec<f64> {
     // vec![0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01]
 }
 
+pub fn gen_wait_cycles(spec: Arc<Spec>, process_nbr: usize) -> Vec<i64>{
+    let wait_cycles = vec![];
+    wait_cycles
+}
+
+pub fn disable_rdm_processes(keys: &mut Vec<f64>) -> bool{
+    let mut r = rng();
+    let chance_to_disable = r.random::<f64>();
+    let disabled_processes = if chance_to_disable > 0.5 {true} else {false};
+    if !disabled_processes {
+        return disabled_processes;
+    }
+
+    let n_disabled_processes = r.random_range(0..=keys.len());
+    for _ in 0..n_disabled_processes {
+        let key = r.random_range(0..keys.len());
+        keys[key] = 1.0;
+    }
+    disabled_processes
+}
+
 pub fn gen_random_genome(spec: Arc<Spec>, process_nbr: usize) -> Genome {
-    let random_keys = gen_random_keys(process_nbr);
+    let mut random_keys = gen_random_keys(process_nbr);
+    let disabled_processes = disable_rdm_processes(&mut random_keys);
+    disable_rdm_processes(&mut random_keys);
     let divider = gen_pending_stock_divider();
-    Genome::new(random_keys, 0, divider, spec.clone())
+    let delay_chance = SmallRng::from_os_rng().random::<f64>();
+    let delay : bool = if delay_chance > 0.5 {true} else {false};
+    let wait_cycles = if delay {gen_wait_cycles(spec.clone(), process_nbr)} else {vec![]};
+    Genome::new(random_keys, 0, divider, spec.clone(), delay, disabled_processes, wait_cycles)
 }
 
 pub fn gen_initial_pop(spec: Arc<Spec>, process_nbr: usize) -> Population {
@@ -249,7 +280,7 @@ fn crossover(p1: &Genome, p2: &Genome) -> Genome {
     } else {
         divider = p2.pending_stock_divider;
     }
-    Genome::new(keys, 0, divider, p1.spec.clone())
+    Genome::new(keys, 0, divider, p1.spec.clone(), false, true, vec![])
 }
 
 fn pick_parents<'a>(sorted: &'a [Genome], elite_cnt: usize) -> (&'a Genome, &'a Genome) {

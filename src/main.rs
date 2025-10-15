@@ -127,7 +127,7 @@ fn main() {
     let spec_arc = Arc::new(spec.clone());
     let pop = gen_initial_pop(spec_arc, spec.processes.len());
 
-    let best = run_ga(pop, 50);
+    let best = run_ga(pop, 200);
 
     eprintln!("Best genome has {} fitness", best.fitness);
 
@@ -181,6 +181,20 @@ cut one or more providers
 
 then cut every useless gainer
 
+
+for the stock you need to optimize
+
+find the list of processes that produce it
+
+2 scenarii : 
+
+1. You have only one process capable of producing the thing we're trying to optimize
+2. You have multiple processes
+
+
+basically the idea is to look at needs of process(sses)
+that produce the stock we need
+check 
 
 
 
