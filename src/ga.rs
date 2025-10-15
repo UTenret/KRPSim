@@ -11,12 +11,12 @@ use std::{
 use rand::{self, Rng, SeedableRng, rng, rngs::SmallRng};
 use rayon::prelude::*;
 
-use crate::logger::Logger;
-use crate::{Job, Optimize, Process, Spec};
+use crate::{Job, Optimize, Process, Spec, logger::print_genome};
+use crate::{Stock, logger::Logger};
 
 const _ELITISM_CNT: i32 = 2;
-const TOP_PCT: f64 = 0.10;
-const BOT_PCT: f64 = 0.4;
+const TOP_PCT: f64 = 0.05;
+const BOT_PCT: f64 = 0.2;
 const HEAD_PCT: f64 = 0.7;
 const MAX_POPULATION: usize = 40;
 const PERCENT_CHANCE_TO_MUTATE: f64 = 3.0;
@@ -34,7 +34,7 @@ pub struct Genome {
     pub fitness: i64,
     pub pending_stock_divider: i32,
     pub spec: Arc<Spec>,
-    pub no_delay: bool,
+    pub delay: bool,
     pub disabled_processes: bool,
     pub wait_cycles: Vec<i64>,
 }
@@ -45,7 +45,7 @@ impl Genome {
         fitness: i64,
         pending_stock_divider: i32,
         spec: Arc<Spec>,
-        no_delay: bool,
+        delay: bool,
         wait_cycles: Vec<i64>,
         disabled_processes: bool,
     ) -> Self {
@@ -54,7 +54,7 @@ impl Genome {
             fitness,
             pending_stock_divider,
             spec,
-            no_delay,
+            delay,
             wait_cycles,
             disabled_processes,
         }
@@ -68,7 +68,7 @@ pub struct Sim<'a> {
     running: BinaryHeap<Reverse<Job>>,
 }
 
-fn priority_from_keys(keys: &[f64]) -> Vec<usize> {
+pub fn priority_from_keys(keys: &[f64]) -> Vec<usize> {
     let mut idx: Vec<usize> = (0..keys.len()).collect();
     idx.sort_by(|&i, &j| keys[i].total_cmp(&keys[j]));
     idx
@@ -129,6 +129,64 @@ fn deficits_for_higher_priority(
     def
 }
 
+pub fn higher_priority_runnable_before_delay(
+    s: &Sim,
+    spec: &Spec,
+    order: &[usize],
+    pos: usize,
+    delay: i64,
+) -> bool {
+    if delay <= 0 || pos == 0 {
+        return false;
+    }
+
+    let time_limit = s.time + delay;
+
+    let mut now = s.time;
+    let mut stocks: HashMap<String, i64> = s.stocks.clone();
+    let mut running = s.running.clone();
+
+    let mut hp_can_run_now = |stocks: &HashMap<String, i64>, now: i64| -> bool {
+        for &pid in &order[..pos] {
+            let p = &spec.processes[pid];
+            let dur = p.duration;
+            if now + dur <= time_limit && inputs_available(p, stocks) {
+                return true;
+            }
+        }
+        false
+    };
+
+    if hp_can_run_now(&stocks, now) {
+        return true;
+    }
+
+    loop {
+        match running.peek() {
+            Some(Reverse(top)) if top.finish_time <= time_limit => {
+                let t_next = top.finish_time;
+                now = t_next;
+
+                while let Some(Reverse(job)) = running.peek() {
+                    if job.finish_time != t_next {
+                        break;
+                    }
+                    let Reverse(job) = running.pop().unwrap();
+                    for r in &job.results {
+                        *stocks.entry(r.name.clone()).or_insert(0) += r.quantity;
+                    }
+                }
+
+                if hp_can_run_now(&stocks, now) {
+                    return true;
+                }
+            }
+            _ => break,
+        }
+    }
+    false
+}
+
 pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> (i64, Sim) {
     let order = priority_from_keys(&cand.keys);
 
@@ -173,13 +231,30 @@ pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> (i64, Sim) {
             if !should_run || p.results.is_empty() {
                 continue;
             }
+            // let mut should_wait = false;
+
+            // if cand.delay {
+            //     if higher_priority_runnable_before_delay(
+            //         &s,
+            //         s.spec,
+            //         &order,
+            //         pos,
+            //         cand.wait_cycles[pos],
+            //     ) {
+            //         should_wait = true;
+            //     }
+            // }
+
+            // if should_wait {
+            //     continue;
+            // }
 
             for n in &p.needs {
                 *s.stocks.entry(n.name.clone()).or_insert(0) -= n.quantity;
             }
 
             s.running.push(Reverse(Job {
-                finish_time: s.time + p.delay,
+                finish_time: s.time + p.duration,
                 proc_id: pid,
                 results: p.results.clone(),
             }));
@@ -235,8 +310,25 @@ fn gen_random_keys(n: usize) -> Vec<f64> {
     // vec![0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01]
 }
 
-pub fn gen_wait_cycles(spec: Arc<Spec>, process_nbr: usize) -> Vec<i64> {
-    let wait_cycles = vec![];
+pub fn gen_wait_cycles(spec: Arc<Spec>, processes_len: usize) -> Vec<i64> {
+    let mut wait_cycles = vec![0; processes_len];
+    // todo refine delay ranges based on max delay, delays of processes etc
+
+    let nbr_delayed = rng().random_range(1..=processes_len);
+
+    let mut r = rng();
+    let mut indices: Vec<usize> = (0..processes_len).collect();
+    for i in 0..nbr_delayed {
+        let j = r.random_range(i..processes_len);
+        indices.swap(i, j);
+    }
+
+    for &idx in &indices[..nbr_delayed] {
+        // todo FIX DELAY GENERATION
+        // pick possible delay from delays of higher processes
+        wait_cycles[idx] = r.random_range(1..=5) as i64;
+    }
+
     wait_cycles
 }
 
@@ -261,13 +353,15 @@ pub fn gen_random_genome(spec: Arc<Spec>, process_nbr: usize) -> Genome {
     let disabled_processes = disable_rdm_processes(&mut random_keys);
     disable_rdm_processes(&mut random_keys);
     let divider = gen_pending_stock_divider();
-    let delay_chance = SmallRng::from_os_rng().random::<f64>();
-    let delay: bool = if delay_chance > 0.5 { true } else { false };
+    // let delay_chance = rng().random::<f64>();
+    // let delay: bool = if delay_chance > 0.5 { true } else { false };
+    let delay: bool = true;
     let wait_cycles = if delay {
         gen_wait_cycles(spec.clone(), process_nbr)
     } else {
-        vec![]
+        vec![0; process_nbr]
     };
+    // eprintln!("{:?}", wait_cycles);
     Genome::new(
         random_keys,
         0,
@@ -293,6 +387,9 @@ fn _mutate(_cand: &mut Genome) {}
 fn crossover(p1: &Genome, p2: &Genome) -> Genome {
     let mut keys: Vec<f64> = vec![];
     let divider: i32;
+    let processes_len = p1.keys.len();
+    let mut wait_cycles = vec![0; processes_len];
+    let mut delay = false;
     for (k_n, k) in p1.keys.iter().enumerate() {
         let r = rng().random::<f64>();
         if r < HEAD_PCT {
@@ -302,27 +399,60 @@ fn crossover(p1: &Genome, p2: &Genome) -> Genome {
         }
     }
 
-    let r = rng().random::<f64>();
+    let mut r = rng().random::<f64>();
     if r < HEAD_PCT {
         divider = p1.pending_stock_divider;
     } else {
         divider = p2.pending_stock_divider;
     }
-    Genome::new(keys, 0, divider, p1.spec.clone(), false, vec![], true)
+
+    r = rng().random::<f64>();
+
+    if r < HEAD_PCT && p1.delay {
+        delay = true;
+        for index in 0..processes_len {
+            let r = rng().random::<f64>();
+            if r < HEAD_PCT {
+                wait_cycles[index] = p1.wait_cycles[index];
+            } else {
+                wait_cycles[index] = p2.wait_cycles[index];
+            }
+        }
+    } else if r > HEAD_PCT && p2.delay {
+        delay = true;
+        for index in 0..processes_len {
+            let r = rng().random::<f64>();
+            if r < HEAD_PCT {
+                wait_cycles[index] = p2.wait_cycles[index];
+            } else {
+                wait_cycles[index] = p1.wait_cycles[index];
+            }
+        }
+    }
+
+    Genome::new(
+        keys,
+        0,
+        divider,
+        p1.spec.clone(),
+        delay,
+        wait_cycles,
+        p1.disabled_processes,
+    )
 }
 
 fn pick_parents<'a>(sorted: &'a [Genome], elite_cnt: usize) -> (&'a Genome, &'a Genome) {
-    let mut rng = rand::rng();
+    let mut r = rand::rng();
     let ec = elite_cnt.clamp(1, MAX_POPULATION);
 
-    let i_elite = rng.random_range(0..ec);
+    let i_elite = r.random_range(0..ec);
 
     if ec < MAX_POPULATION {
-        let i_other = rng.random_range(ec..MAX_POPULATION);
+        let i_other = r.random_range(ec..MAX_POPULATION);
         (&sorted[i_elite], &sorted[i_other])
     } else {
         let i_other = if MAX_POPULATION > 1 {
-            let mut j = rng.random_range(0..MAX_POPULATION);
+            let mut j = r.random_range(0..MAX_POPULATION);
             if j == i_elite {
                 j = (j + 1) % MAX_POPULATION;
             }
@@ -330,12 +460,18 @@ fn pick_parents<'a>(sorted: &'a [Genome], elite_cnt: usize) -> (&'a Genome, &'a 
         } else {
             0
         };
+        // if rng().random::<f64>() > 0.5 {
+        //     return (&sorted[i_elite], &sorted[i_other]);
+        // } else {
+        //     return (&sorted[i_other], &sorted[i_elite]);
+        // }
         (&sorted[i_elite], &sorted[i_other])
     }
 }
 
 pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
     for (_index, genome) in pop.candidates.iter_mut().enumerate() {
+        // eprintln!("p2  : {:?}", genome.wait_cycles);
         let _ = eval_fitness(genome, MAX_CYCLES);
         // eprintln!("Genome {} of generation has {} fitness.", index, fit);
     }
@@ -350,10 +486,11 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
     let spec = best.spec.clone();
 
     for _gen in 0..generations {
-        eprintln!(
-            "Best Genome of generation {} has {} fitness.",
-            _gen, best.fitness
-        );
+        // eprintln!(
+        //     "Best Genome of generation {} has {} fitness and delay : {}, wait_cycles : {:?}",
+        //     _gen, best.fitness, best.delay, best.wait_cycles
+        // );
+        print_genome(&best);
         pop.candidates.sort_by_key(|g| std::cmp::Reverse(g.fitness));
 
         let elite_cnt = (TOP_PCT * MAX_POPULATION as f64) as usize;

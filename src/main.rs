@@ -3,8 +3,8 @@ use std::env;
 use std::fs;
 use std::process::exit;
 mod ga;
-mod parser;
 mod logger;
+mod parser;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -67,17 +67,17 @@ pub struct Process {
     name: String,
     needs: Vec<Stock>,
     results: Vec<Stock>,
-    delay: i64,
+    duration: i64,
 }
 
 impl Process {
-    fn new(id: usize, name: &str, needs: Vec<Stock>, results: Vec<Stock>, delay: i64) -> Self {
+    fn new(id: usize, name: &str, needs: Vec<Stock>, results: Vec<Stock>, duration: i64) -> Self {
         Self {
             id,
             name: name.to_string(),
             needs,
             results,
-            delay,
+            duration,
         }
     }
 }
@@ -127,7 +127,7 @@ fn main() {
     let spec_arc = Arc::new(spec.clone());
     let pop = gen_initial_pop(spec_arc, spec.processes.len());
 
-    let best = run_ga(pop, 200);
+    let best = run_ga(pop, 5000);
 
     eprintln!("Best genome has {} fitness", best.fitness);
 
@@ -186,7 +186,7 @@ for the stock you need to optimize
 
 find the list of processes that produce it
 
-2 scenarii : 
+2 scenarii :
 
 1. You have only one process capable of producing the thing we're trying to optimize
 2. You have multiple processes
@@ -194,7 +194,7 @@ find the list of processes that produce it
 
 basically the idea is to look at needs of process(sses)
 that produce the stock we need
-check 
+check
 
 
 
