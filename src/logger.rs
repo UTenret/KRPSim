@@ -37,13 +37,6 @@ pub fn print_genome(genome: &Genome) {
     println!("====================== GENOME ======================");
     println!("fitness                 : {}", genome.fitness);
     println!("pending_stock_divider   : {}", genome.pending_stock_divider);
-    println!("delay                   : {}", genome.delay);
-    let nonzero_waits = genome.wait_cycles.iter().filter(|&&w| w > 0).count();
-    println!(
-        "wait_cycles (non-zero)  : {}/{}",
-        nonzero_waits,
-        genome.wait_cycles.len()
-    );
     println!("disabled_processes flag : {}", genome.disabled_processes);
 
     // Optimize target
@@ -86,25 +79,16 @@ pub fn print_genome(genome: &Genome) {
     for (rank, &pid) in order.iter().enumerate() {
         let p = &spec.processes[pid];
         let key = genome.keys[pid];
-        let wait = genome.wait_cycles.get(pid).copied().unwrap_or(0);
         let needs = fmt_stock_list(&p.needs);
         let results = fmt_stock_list(&p.results);
 
         println!(
-            "{:<4} {:<6} {:<12.6} {:<8} {:<8} {:<40} {:<40}",
-            rank,
-            pid,
-            key,
-            if genome.delay { wait } else { 0 },
-            p.duration,
-            needs,
-            results
+            "{:<4} {:<6} {:<12.6}  {:<8} {:<40} {:<40}",
+            rank, pid, key, p.duration, needs, results
         );
     }
 
     // Also show wait cycles in priority order as a single line (handy for debugging)
-    let waits_in_order: Vec<i64> = order.iter().map(|&pid| genome.wait_cycles[pid]).collect();
-    println!("\nwait_cycles (priority order) : {:?}", waits_in_order);
 
     println!("====================================================\n");
 }
