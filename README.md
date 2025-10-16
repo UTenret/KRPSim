@@ -1,4 +1,4 @@
-## This is a 42 School project aimed at solving a number of RCPSP-like problems
+## This project aims at solving a number of extended RCPSP-like problems
 
 ### 10_000 cycles current upper bounds
 

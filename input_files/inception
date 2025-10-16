@@ -3,8 +3,6 @@
 #
 # stock      name:quantity
 clock:1
-second:50000000
-dream:300000
 #
 # process   name:(need1:qty1;need2:qty2;[...]):(result1:qty1;result2:qty2;[...]):delay
 #

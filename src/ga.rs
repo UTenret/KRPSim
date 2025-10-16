@@ -1,6 +1,6 @@
 use std::{
-    cmp::Reverse,
-    collections::{BinaryHeap, HashMap},
+    cmp::{Reverse, max, min},
+    collections::{BinaryHeap, HashMap, HashSet},
     hash::Hash,
     i64,
     process::exit,
@@ -15,13 +15,16 @@ use crate::{Job, Optimize, Process, Spec, logger::print_genome};
 use crate::{Stock, logger::Logger};
 
 const _ELITISM_CNT: i32 = 2;
-const TOP_PCT: f64 = 0.05;
+const TOP_PCT: f64 = 0.1;
 const BOT_PCT: f64 = 0.2;
-const HEAD_PCT: f64 = 0.7;
-const MAX_POPULATION: usize = 40;
+const HEAD_PCT: f64 = 0.5;
+const MAX_POPULATION: usize = 80;
 const PERCENT_CHANCE_TO_MUTATE: f64 = 3.0;
 const MAX_CYCLES: i64 = 10000;
 const DEBUG_WRITE_MODE: bool = true;
+const RESET_VALUE_GEN: i64 = 2;
+const RESET_DIVIDER: i64 = 8;
+const MAX_RESET_VALUE: i64 = 20;
 
 #[derive(Default)]
 pub struct Population {
@@ -323,10 +326,21 @@ pub fn gen_wait_cycles(spec: Arc<Spec>, processes_len: usize) -> Vec<i64> {
         indices.swap(i, j);
     }
 
+    let mut possible_delays = Vec::<i64>::new();
+
+    for process in &spec.processes {
+        possible_delays.push(process.duration);
+    }
+
+    // dbg!("{}", &possible_delays);
+
+    let possible_delays_len = &possible_delays.len();
+
     for &idx in &indices[..nbr_delayed] {
         // todo FIX DELAY GENERATION
         // pick possible delay from delays of higher processes
-        wait_cycles[idx] = r.random_range(1..=5) as i64;
+        let delay_idx: usize = r.random_range(0..*possible_delays_len as i64) as usize;
+        wait_cycles[idx] = possible_delays[delay_idx];
     }
 
     wait_cycles
@@ -485,12 +499,17 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
 
     let spec = best.spec.clone();
 
+    let mut last_improvment: i64 = 0;
+    let mut best_fitness = 0;
+    let mut current_reset_value = RESET_VALUE_GEN;
+    let mut last_wipe_improvments = false;
+
     for _gen in 0..generations {
-        // eprintln!(
-        //     "Best Genome of generation {} has {} fitness and delay : {}, wait_cycles : {:?}",
-        //     _gen, best.fitness, best.delay, best.wait_cycles
-        // );
-        print_genome(&best);
+        eprintln!(
+            "Best Genome of generation {} has {} fitness and delay : {}, wait_cycles : {:?}",
+            _gen, best.fitness, best.delay, best.wait_cycles
+        );
+        // print_genome(&best);
         pop.candidates.sort_by_key(|g| std::cmp::Reverse(g.fitness));
 
         let elite_cnt = (TOP_PCT * MAX_POPULATION as f64) as usize;
@@ -501,24 +520,42 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
 
         let mut next: Vec<Genome> = Vec::with_capacity(MAX_POPULATION as usize);
 
-        next.extend(pop.candidates.iter().take(elite_cnt).cloned());
+        eprintln!("gen: {}, l: {}", _gen, last_improvment);
+        if _gen as i64 - last_improvment > current_reset_value {
+            eprintln!("we had to wipe them all but the best one");
+            if last_wipe_improvments == false {
+                current_reset_value = min(
+                    MAX_RESET_VALUE,
+                    current_reset_value + _gen as i64 / (MAX_POPULATION as i64 / RESET_DIVIDER),
+                );
+                // current_reset_value += 2;
+            }
+            last_improvment = _gen as i64;
+            last_wipe_improvments = false;
+            next.push(pop.candidates[0].clone());
+            while next.len() < MAX_POPULATION {
+                next.push(gen_random_genome(spec.clone(), spec.processes.len()));
+            }
+        } else {
+            next.extend(pop.candidates.iter().take(elite_cnt).cloned());
 
-        // eprintln!("sE : {}", survivors_end);
-        // eprintln!("next.len() : {}", next.len());
-        // eprintln!("elite_cnt : {}", elite_cnt);
+            // eprintln!("sE : {}", survivors_end);
+            // eprintln!("next.len() : {}", next.len());
+            // eprintln!("elite_cnt : {}", elite_cnt);
 
-        while next.len() < survivors_end {
-            let (p1, p2) = pick_parents(&pop.candidates, elite_cnt);
-            let child = crossover(p1, p2);
-            // eprintln!(
-            // "p1 keys: {:?}, p2 keys: {:?}, child keys: {:?}",
-            // p1.keys, p2.keys, child.keys
-            // );
-            next.push(child);
-        }
+            while next.len() < survivors_end {
+                let (p1, p2) = pick_parents(&pop.candidates, elite_cnt);
+                let child = crossover(p1, p2);
+                // eprintln!(
+                // "p1 keys: {:?}, p2 keys: {:?}, child keys: {:?}",
+                // p1.keys, p2.keys, child.keys
+                // );
+                next.push(child);
+            }
 
-        while next.len() < MAX_POPULATION {
-            next.push(gen_random_genome(spec.clone(), spec.processes.len()));
+            while next.len() < MAX_POPULATION {
+                next.push(gen_random_genome(spec.clone(), spec.processes.len()));
+            }
         }
 
         pop.candidates = next;
@@ -540,6 +577,12 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
                 best = cur_best.clone();
             }
         }
+        if best.fitness > best_fitness {
+            last_improvment = _gen as i64;
+            best_fitness = best.fitness;
+            last_wipe_improvments = true;
+        }
+
         let (_, s) = eval_fitness(&mut best, MAX_CYCLES);
         eprintln!("stocks of best : {:?}", s.stocks);
     }
