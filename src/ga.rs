@@ -1,9 +1,8 @@
 use std::{
-    cmp::{Reverse, max, min},
+    cmp::{Reverse, min},
     collections::{BinaryHeap, HashMap, HashSet},
     hash::Hash,
     i64,
-    process::exit,
     sync::Arc,
     vec,
 };
@@ -14,12 +13,10 @@ use rayon::prelude::*;
 use crate::{Job, Optimize, Process, Spec, logger::print_genome};
 use crate::{Stock, logger::Logger};
 
-const _ELITISM_CNT: i32 = 2;
 const TOP_PCT: f64 = 0.1;
 const BOT_PCT: f64 = 0.2;
 const HEAD_PCT: f64 = 0.5;
 const MAX_POPULATION: usize = 400;
-const PERCENT_CHANCE_TO_MUTATE: f64 = 3.0;
 const MAX_CYCLES: i64 = 10000;
 const DEBUG_WRITE_MODE: bool = true;
 const RESET_VALUE_GEN: i64 = 2;
@@ -27,6 +24,9 @@ const RESET_DIVIDER: i64 = 8;
 const MAX_RESET_VALUE: i64 = 20;
 const ISLANDS_COUNT: usize = 8;
 const MAX_POPULATION_PER_ISLAND: usize = MAX_POPULATION / ISLANDS_COUNT;
+const MUT_CHANCE_DISABLE_PROCESS: f64 = 0.05;
+const MUT_CHANCE_ENABLE_PROCESS: f64 = 0.05;
+const MUT_CHANCE_SWAP_PROCESS: f64 = 0.10;
 
 #[derive(Default)]
 pub struct Population {
@@ -302,7 +302,11 @@ pub fn gen_initial_pop(spec: Arc<Spec>, process_nbr: usize) -> Population {
     pop
 }
 
-fn _mutate(_cand: &mut Genome) {}
+fn mutate(cand: &mut Genome) {
+    let key1 = rng().random_range(0..cand.keys.len());
+    let key2 = rng().random_range(0..cand.keys.len());
+    cand.keys.swap(key1, key2);
+}
 
 fn crossover(p1: &Genome, p2: &Genome) -> Genome {
     let mut keys: Vec<f64> = vec![];
@@ -442,6 +446,7 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
 
                 if isl_idx == ISLANDS_COUNT - 1 {
                     for idx in 0..ISLANDS_COUNT {
+                        pop.candidates[idx].sort_by_key(|g| std::cmp::Reverse(g.fitness));
                         let cand = pop.candidates[idx][0].clone();
                         if seen.insert(cand.clone()) {
                             next.push(cand);
@@ -455,7 +460,10 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
 
                 while next.len() < survivors_end {
                     let (p1, p2) = pick_parents(&pop.candidates[isl_idx], elite_cnt);
-                    let child = crossover(p1, p2);
+                    let mut child = crossover(p1, p2);
+                    if rng().random_bool(MUT_CHANCE_SWAP_PROCESS) {
+                        mutate(&mut child);
+                    }
                     // eprintln!(
                     // "p1 keys: {:?}, p2 keys: {:?}, child keys: {:?}",
                     // p1.keys, p2.keys, child.keys
