@@ -127,11 +127,11 @@ fn deficits_for_higher_priority(
             continue;
         }
 
-        for need in &spec.needs[hp_idx] {
-            let have = stocks[need.0];
-            let deficit = need.1 - have;
-            if deficit > 0 {
-                def[need.0] = min(i64::MAX, def[need.0] + deficit);
+        for &(stock_id, need_qty) in &spec.needs[hp_idx] {
+            let have = stocks[stock_id];
+            let deficit = need_qty - have;
+            if deficit > 0 && def[stock_id] != i64::MAX {
+                def[stock_id] = def[stock_id].saturating_add(deficit);
             }
         }
     }
@@ -219,8 +219,8 @@ pub fn eval_fitness(spec: &SimSpec, cand: &mut Genome, horizon: i64) -> (i64, Si
         }
     }
 
-    eprintln!("s.stocks : {:?}", s.stocks);
-    eprintln!("fit : {:?}", s.stocks[spec.target_stock_id]);
+    // eprintln!("s.stocks : {:?}", s.stocks);
+    // eprintln!("fit : {:?}", s.stocks[spec.target_stock_id]);
 
     let fit = s.stocks[spec.target_stock_id];
     cand.fitness = fit;
