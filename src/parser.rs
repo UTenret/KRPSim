@@ -87,10 +87,9 @@ fn parse_process(line_nbr: usize, p_id: usize, input: &str) -> Result<Process, S
         .rsplit_once(':')
         .ok_or_else(|| "Missing delay".to_string())?;
 
-    let delay: i64 = match delay_str.parse::<i64>() {
-        Ok(d) => d,
-        Err(e) => return Err(format!("invalid delay: {}", e)),
-    };
+    let delay: i64 = delay_str
+        .parse::<i64>()
+        .map_err(|e| format!("invalid delay: {}", e))?;
 
     let opening_brackets_cnt = rest.chars().filter(|&c| c == '(').count();
 

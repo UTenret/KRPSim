@@ -35,5 +35,7 @@ if max dur is longest process \* 1.5
 last process with high tau could wait forever
 tau vector, any process could then be effectively locked out
 
+229-430
 
-### Python requir txt
+parallelize the crossovers, mutation, everything else as much as possible(big gains)
+we need to seed the rng to get deterministic results

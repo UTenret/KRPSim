@@ -4,13 +4,14 @@ use std::{
     hash::Hash,
     i64,
     sync::Arc,
+    time::Instant,
     vec,
 };
 
 use rand::{self, Rng, SeedableRng, rng, rngs::SmallRng};
 use rayon::prelude::*;
 
-use crate::{Job, Optimize, Process, Spec, logger::print_genome};
+use crate::{Job, Optimize, Process, SimSpec, Spec};
 use crate::{Stock, logger::Logger};
 
 const TOP_PCT: f64 = 0.1;
@@ -38,7 +39,6 @@ pub struct Genome {
     pub keys: Vec<f64>,
     pub fitness: i64,
     pub pending_stock_divider: i32,
-    pub spec: Arc<Spec>,
     pub disabled_processes: bool,
 }
 
@@ -47,14 +47,12 @@ impl Genome {
         keys: Vec<f64>,
         fitness: i64,
         pending_stock_divider: i32,
-        spec: Arc<Spec>,
         disabled_processes: bool,
     ) -> Self {
         Self {
             keys,
             fitness,
             pending_stock_divider,
-            spec,
             disabled_processes,
         }
     }
@@ -82,10 +80,9 @@ impl PartialEq for Genome {
 }
 impl Eq for Genome {}
 
-pub struct Sim<'a> {
-    spec: &'a Spec,
+pub struct Sim {
     time: i64,
-    stocks: HashMap<String, i64>,
+    stocks: Vec<i64>,
     running: BinaryHeap<Reverse<Job>>,
 }
 
@@ -99,54 +96,42 @@ fn quantize(x: f64, scale: f64) -> i64 {
     (x * scale).round() as i64
 }
 
-fn inputs_available(p: &Process, stocks: &HashMap<String, i64>) -> bool {
-    p.needs
-        .iter()
-        .all(|n| stocks.get(&n.name).copied().unwrap_or(0) >= n.quantity)
+fn inputs_available(needs: &Vec<(usize, i64)>, stocks: &Vec<i64>) -> bool {
+    needs.iter().all(|s| stocks[s.0] >= s.1)
 }
 
 fn deficits_for_higher_priority(
     order: &[usize],
     pos: usize,
-    spec: &Spec,
-    stocks: &HashMap<String, i64>,
-) -> HashMap<String, i64> {
-    let mut def = HashMap::new();
+    spec: &SimSpec,
+    stocks: &Vec<i64>,
+) -> Vec<i64> {
+    let mut def = vec![0; spec.init_stocks.len()];
 
     for (pidx, &hp_idx) in order[..pos].iter().enumerate() {
-        let p = &spec.processes[hp_idx];
-
         // eprintln!("pidx: {}", pidx);
         if pidx == 0 {
-            for r in &p.results {
-                def.insert(r.name.clone(), i64::MAX);
+            for result in &spec.results[hp_idx] {
+                let stock_id = result.0;
+                def[stock_id] = i64::MAX;
             }
             if let Optimize::Quantity(_) = spec.optimize {
-                for n in &p.needs {
-                    def.insert(n.name.clone(), i64::MAX);
+                for need in &spec.needs[hp_idx] {
+                    let stock_id = need.0;
+                    def[stock_id] = i64::MAX;
                 }
             }
         }
 
-        let blocked_by_inventory = p
-            .needs
-            .iter()
-            .any(|n| stocks.get(&n.name).copied().unwrap_or(0) < n.quantity);
-        if !blocked_by_inventory {
+        if inputs_available(&spec.needs[hp_idx], stocks) {
             continue;
         }
 
-        for n in &p.needs {
-            let have = stocks.get(&n.name).copied().unwrap_or(0);
-            let deficit = n.quantity - have;
+        for need in &spec.needs[hp_idx] {
+            let have = stocks[need.0];
+            let deficit = need.1 - have;
             if deficit > 0 {
-                def.entry(n.name.clone())
-                    .and_modify(|v: &mut i64| {
-                        if *v != i64::MAX {
-                            *v = v.saturating_add(deficit);
-                        }
-                    })
-                    .or_insert(deficit);
+                def[need.0] = min(i64::MAX, def[need.0] + deficit);
             }
         }
     }
@@ -154,20 +139,19 @@ fn deficits_for_higher_priority(
     def
 }
 
-pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> (i64, Sim) {
+pub fn eval_fitness(spec: &SimSpec, cand: &mut Genome, horizon: i64) -> (i64, Sim) {
     let order = priority_from_keys(&cand.keys);
 
     let mut s = Sim {
-        spec: &cand.spec.as_ref(),
         time: 0,
-        stocks: cand.spec.init_stocks.clone(),
+        stocks: spec.init_stocks.clone(),
         running: BinaryHeap::new(),
     };
 
-    let mut pending: HashMap<String, i64> = HashMap::new();
+    let mut pending: Vec<i64> = vec![0; spec.init_stocks.len()];
     // let mut logger = Logger::new(&s.stocks, "stock_evolution.csv");
 
-    let target = match &s.spec.optimize {
+    let target = match &spec.optimize {
         Optimize::Quantity(name) | Optimize::Time(name) => name.as_str(),
     };
 
@@ -178,39 +162,37 @@ pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> (i64, Sim) {
         //     }
         // }
         for (pos, &pid) in order.iter().enumerate() {
-            if cand.keys[pos] == 1.0 {
+            if cand.keys[pid] == 1.0 {
                 continue;
             }
 
-            let p = &s.spec.processes[pid];
-
-            if !inputs_available(p, &s.stocks) {
+            if !inputs_available(&spec.needs[pid], &s.stocks) {
                 continue;
             }
 
-            let deficit = deficits_for_higher_priority(&order, pos + 1, &s.spec, &s.stocks);
-            let should_run = p.results.iter().any(|r| {
-                deficit.get(&r.name).copied().unwrap_or(0)
-                    > (pending.get(&r.name).copied().unwrap_or(0)
-                        / cand.pending_stock_divider as i64)
+            let deficit = deficits_for_higher_priority(&order, pos + 1, spec, &s.stocks);
+            let should_run = spec.results[pid].iter().any(|r| {
+                let stock_id = r.0;
+                deficit[stock_id] > (pending[stock_id] / cand.pending_stock_divider as i64)
             });
 
-            if !should_run || p.results.is_empty() {
+            if !should_run || spec.results[pid].is_empty() {
                 continue;
             }
 
-            for n in &p.needs {
-                *s.stocks.entry(n.name.clone()).or_insert(0) -= n.quantity;
+            for n in &spec.needs[pid] {
+                s.stocks[n.0] -= n.1;
             }
 
             s.running.push(Reverse(Job {
-                finish_time: s.time + p.duration,
+                finish_time: s.time + spec.durations[pid],
                 proc_id: pid,
-                results: p.results.clone(),
             }));
 
-            for r in &p.results {
-                *pending.entry(r.name.clone()).or_insert(0) += r.quantity;
+            for r in &spec.results[pid] {
+                let stock_id = r.0;
+                let qty = r.1;
+                pending[stock_id] += qty;
             }
         }
 
@@ -225,13 +207,11 @@ pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> (i64, Sim) {
                 }
                 let Reverse(job) = s.running.pop().unwrap();
 
-                for r in job.results.iter() {
-                    *s.stocks.entry(r.name.clone()).or_insert(0) += r.quantity;
-                    let e = pending.entry(r.name.clone()).or_insert(0);
-                    *e -= r.quantity;
-                    if *e <= 0 {
-                        pending.remove(&r.name);
-                    }
+                for r in spec.results[job.proc_id].iter() {
+                    let stock_id = r.0;
+                    let qty = r.1;
+                    s.stocks[stock_id] += qty;
+                    pending[stock_id] -= qty;
                 }
             }
         } else {
@@ -239,7 +219,10 @@ pub fn eval_fitness(cand: &mut Genome, horizon: i64) -> (i64, Sim) {
         }
     }
 
-    let fit = *s.stocks.get(target).unwrap_or(&0);
+    eprintln!("s.stocks : {:?}", s.stocks);
+    eprintln!("fit : {:?}", s.stocks[spec.target_stock_id]);
+
+    let fit = s.stocks[spec.target_stock_id];
     cand.fitness = fit;
     (fit, s)
 }
@@ -281,21 +264,21 @@ pub fn disable_rdm_processes(keys: &mut Vec<f64>) -> bool {
     disabled_processes
 }
 
-pub fn gen_random_genome(spec: Arc<Spec>, process_nbr: usize) -> Genome {
-    let mut random_keys = gen_random_keys(process_nbr);
+pub fn gen_random_genome(cnt_processes: usize) -> Genome {
+    let mut random_keys = gen_random_keys(cnt_processes);
     let disabled_processes = disable_rdm_processes(&mut random_keys);
-    disable_rdm_processes(&mut random_keys);
+    // disable_rdm_processes(&mut random_keys);
     let divider = gen_pending_stock_divider();
 
     // eprintln!("{:?}", wait_cycles);
-    Genome::new(random_keys, 0, divider, spec.clone(), disabled_processes)
+    Genome::new(random_keys, 0, divider, disabled_processes)
 }
 
-pub fn gen_initial_pop(spec: Arc<Spec>, process_nbr: usize) -> Population {
+pub fn gen_initial_pop(cnt_processes: usize) -> Population {
     let mut pop: Population = Default::default();
     for idx in 0..ISLANDS_COUNT {
         for _ in 0..MAX_POPULATION_PER_ISLAND {
-            let cand = gen_random_genome(spec.clone(), process_nbr);
+            let cand = gen_random_genome(cnt_processes);
             pop.candidates[idx].push(cand);
         }
     }
@@ -311,8 +294,7 @@ fn mutate(cand: &mut Genome) {
 fn crossover(p1: &Genome, p2: &Genome) -> Genome {
     let mut keys: Vec<f64> = vec![];
     let divider: i32;
-    let processes_len = p1.keys.len();
-    for (k_n, k) in p1.keys.iter().enumerate() {
+    for (k_n, _) in p1.keys.iter().enumerate() {
         let r = rng().random::<f64>();
         if r < HEAD_PCT {
             keys.push(p1.keys[k_n]);
@@ -330,7 +312,7 @@ fn crossover(p1: &Genome, p2: &Genome) -> Genome {
 
     r = rng().random::<f64>();
 
-    Genome::new(keys, 0, divider, p1.spec.clone(), p1.disabled_processes)
+    Genome::new(keys, 0, divider, p1.disabled_processes)
 }
 
 fn pick_parents<'a>(sorted: &'a [Genome], elite_cnt: usize) -> (&'a Genome, &'a Genome) {
@@ -361,14 +343,15 @@ fn pick_parents<'a>(sorted: &'a [Genome], elite_cnt: usize) -> (&'a Genome, &'a 
     }
 }
 
-pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
+pub fn run_ga(spec: Arc<SimSpec>, mut pop: Population, generations: usize) -> Genome {
     let mut best_cands: Vec<Genome> = vec![];
     for idx in 0..ISLANDS_COUNT {
-        for (_index, genome) in pop.candidates[idx].iter_mut().enumerate() {
-            // eprintln!("p2  : {:?}", genome.wait_cycles);
-            let _ = eval_fitness(genome, MAX_CYCLES);
-            // eprintln!("Genome {} of generation has {} fitness.", index, fit);
-        }
+        pop.candidates[idx]
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, cand)| {
+                eval_fitness(&spec, cand, MAX_CYCLES);
+            });
         best_cands.push(
             pop.candidates[idx]
                 .iter()
@@ -378,14 +361,17 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
         );
     }
 
-    let spec = best_cands[0].spec.clone();
-
     let mut last_improvment: Vec<i64> = vec![0; ISLANDS_COUNT];
     let mut best_fitness: Vec<i64> = vec![0; ISLANDS_COUNT];
     let mut current_reset_value: Vec<i64> = vec![RESET_VALUE_GEN; ISLANDS_COUNT];
     let mut last_wipe_improvments: Vec<bool> = vec![false; ISLANDS_COUNT];
 
+    let t0 = Instant::now();
+
     for _gen in 0..generations {
+        let now = t0.elapsed().as_secs_f64();
+
+        eprintln!("now : {:.3}", now);
         for isl_idx in 0..ISLANDS_COUNT {
             if isl_idx == ISLANDS_COUNT - 1 {
                 eprintln!(
@@ -412,7 +398,7 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
 
             // eprintln!("gen: {}, l: {}", _gen, last_improvment[isl_idx]);
             if _gen as i64 - last_improvment[isl_idx] > current_reset_value[isl_idx] {
-                eprintln!("we had to wipe them all but the best one");
+                // eprintln!("we had to wipe them all but the best one");
                 if last_wipe_improvments[isl_idx] == false {
                     current_reset_value[isl_idx] = min(
                         MAX_RESET_VALUE,
@@ -425,19 +411,11 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
                 last_wipe_improvments[isl_idx] = false;
                 next.push(pop.candidates[isl_idx][0].clone());
                 while next.len() < MAX_POPULATION_PER_ISLAND {
-                    next.push(gen_random_genome(spec.clone(), spec.processes.len()));
+                    next.push(gen_random_genome(spec.needs.len()));
                 }
             } else {
                 // we keep our percentages elites on this island
                 next.extend(pop.candidates[isl_idx].iter().take(elite_cnt).cloned());
-
-                // and we also take the best of the previous isl
-
-                // if isl_idx == 0 {
-                //     next.push(pop.candidates[ISLANDS_COUNT - 1][0].clone());
-                // } else {
-                //     next.push(pop.candidates[isl_idx - 1][0].clone());
-                // }
 
                 let mut seen: HashSet<Genome> = HashSet::with_capacity(MAX_POPULATION_PER_ISLAND);
                 for g in &next {
@@ -472,7 +450,7 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
                 }
 
                 while next.len() < MAX_POPULATION_PER_ISLAND {
-                    next.push(gen_random_genome(spec.clone(), spec.processes.len()));
+                    next.push(gen_random_genome(spec.needs.len()));
                 }
             }
 
@@ -487,7 +465,7 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
                 .par_iter_mut()
                 .enumerate()
                 .for_each(|(i, cand)| {
-                    eval_fitness(cand, MAX_CYCLES);
+                    eval_fitness(&spec, cand, MAX_CYCLES);
                 });
 
             if let Some(cur_best) = pop.candidates[isl_idx].iter().max_by_key(|c| c.fitness) {
@@ -509,7 +487,7 @@ pub fn run_ga(mut pop: Population, generations: usize) -> Genome {
     }
     best_cands.sort_by_key(|g| std::cmp::Reverse(g.fitness));
 
-    let (f, s) = eval_fitness(&mut best_cands[0], MAX_CYCLES);
+    let (f, s) = eval_fitness(&spec, &mut best_cands[0], MAX_CYCLES);
     // let (f2, s2) = eval_fitness(&best_cands[ISLANDS_COUNT - 1].clone(), MAX_CYCLES);
     eprintln!(
         "fitness of best overall is {} and stocks of best overall : {:?}",
