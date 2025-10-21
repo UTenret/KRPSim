@@ -105,20 +105,19 @@ fn deficits_for_higher_priority(
     pos: usize,
     spec: &SimSpec,
     stocks: &Vec<i64>,
-) -> Vec<i64> {
-    let mut def = vec![0; spec.init_stocks.len()];
-
-    for (pidx, &hp_idx) in order[..pos].iter().enumerate() {
+    deficit: &mut Vec<i64>,
+) {
+    for (_, &hp_idx) in order[pos..=pos].iter().enumerate() {
         // eprintln!("pidx: {}", pidx);
-        if pidx == 0 {
+        if pos == 0 {
             for result in &spec.results[hp_idx] {
                 let stock_id = result.0;
-                def[stock_id] = i64::MAX;
+                deficit[stock_id] = i64::MAX;
             }
             if let Optimize::Quantity(_) = spec.optimize {
                 for need in &spec.needs[hp_idx] {
                     let stock_id = need.0;
-                    def[stock_id] = i64::MAX;
+                    deficit[stock_id] = i64::MAX;
                 }
             }
         }
@@ -129,14 +128,12 @@ fn deficits_for_higher_priority(
 
         for &(stock_id, need_qty) in &spec.needs[hp_idx] {
             let have = stocks[stock_id];
-            let deficit = need_qty - have;
-            if deficit > 0 && def[stock_id] != i64::MAX {
-                def[stock_id] = def[stock_id].saturating_add(deficit);
+            let d = need_qty - have;
+            if d > 0 && deficit[stock_id] != i64::MAX {
+                deficit[stock_id] = deficit[stock_id].saturating_add(d);
             }
         }
     }
-    // eprintln!("current def : {:?}", def);
-    def
 }
 
 pub fn eval_fitness(spec: &SimSpec, cand: &mut Genome, horizon: i64) -> (i64, Sim) {
@@ -151,17 +148,17 @@ pub fn eval_fitness(spec: &SimSpec, cand: &mut Genome, horizon: i64) -> (i64, Si
     let mut pending: Vec<i64> = vec![0; spec.init_stocks.len()];
     // let mut logger = Logger::new(&s.stocks, "stock_evolution.csv");
 
-    let target = match &spec.optimize {
-        Optimize::Quantity(name) | Optimize::Time(name) => name.as_str(),
-    };
-
     while s.time < horizon {
         // if DEBUG_WRITE_MODE {
         //     if (logger) {
         //         logger.log_stocks(s.time, &s.stocks);
         //     }
         // }
+        let mut deficit = vec![0; spec.init_stocks.len()];
+
         for (pos, &pid) in order.iter().enumerate() {
+            deficits_for_higher_priority(&order, pos, spec, &s.stocks, &mut deficit);
+
             if cand.keys[pid] == 1.0 {
                 continue;
             }
@@ -170,11 +167,12 @@ pub fn eval_fitness(spec: &SimSpec, cand: &mut Genome, horizon: i64) -> (i64, Si
                 continue;
             }
 
-            let deficit = deficits_for_higher_priority(&order, pos + 1, spec, &s.stocks);
             let should_run = spec.results[pid].iter().any(|r| {
                 let stock_id = r.0;
                 deficit[stock_id] > (pending[stock_id] / cand.pending_stock_divider as i64)
             });
+
+            // eprintln!("deficit : {:?}", deficit);
 
             if !should_run || spec.results[pid].is_empty() {
                 continue;
@@ -477,6 +475,9 @@ pub fn run_ga(spec: Arc<SimSpec>, mut pop: Population, generations: usize) -> Ge
                 last_improvment[isl_idx] = _gen as i64;
                 best_fitness[isl_idx] = best_cands[isl_idx].fitness;
                 last_wipe_improvments[isl_idx] = true;
+                // if best_cands[isl_idx].fitness > 200_000 {
+                //     return best_cands[isl_idx].clone();
+                // }
             }
 
             // if isl_idx == ISLANDS_COUNT - 1 {
