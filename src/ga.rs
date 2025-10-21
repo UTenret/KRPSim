@@ -147,14 +147,14 @@ pub fn eval_fitness(spec: &SimSpec, cand: &mut Genome, horizon: i64) -> (i64, Si
 
     let mut pending: Vec<i64> = vec![0; spec.init_stocks.len()];
     // let mut logger = Logger::new(&s.stocks, "stock_evolution.csv");
-
+    let mut deficit = vec![0; spec.init_stocks.len()];
     while s.time < horizon {
         // if DEBUG_WRITE_MODE {
         //     if (logger) {
         //         logger.log_stocks(s.time, &s.stocks);
         //     }
         // }
-        let mut deficit = vec![0; spec.init_stocks.len()];
+        deficit.fill(0);
 
         for (pos, &pid) in order.iter().enumerate() {
             deficits_for_higher_priority(&order, pos, spec, &s.stocks, &mut deficit);
