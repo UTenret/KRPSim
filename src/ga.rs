@@ -157,7 +157,9 @@ pub fn eval_fitness(spec: &SimSpec, cand: &mut Genome, horizon: i64) -> (i64, Si
         deficit.fill(0);
 
         for (pos, &pid) in order.iter().enumerate() {
-            deficits_for_higher_priority(&order, pos, spec, &s.stocks, &mut deficit);
+            if pos > 0 {
+                deficits_for_higher_priority(&order, pos - 1, spec, &s.stocks, &mut deficit);
+            }
 
             if cand.keys[pid] == 1.0 {
                 continue;
