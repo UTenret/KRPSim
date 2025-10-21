@@ -27,9 +27,9 @@ You can also use `cargo run --release -- <input_file> [seed]`. The optional seed
 
 Each scenario is a plain text file. Blank lines and lines that start with `#` are ignored. The grammar uses three kinds of statements:
 
--   Stock definition : Declares the initial quantity for a resource. Missing stocks default to 0. Example : `iron_plate:15`
--   Process definition: Describes consumption, production, and duration. Needs and results lists are semicolon-separated `name:qty` pairs. Either list may be empty. | `smelt:(ore:1;coal:1):(plate:1):3`
--   Optimize directive | Chooses the objective. Use `optimize:(stock)` to maximize a stock quantity, or `optimize:(time;stock)` to minimize the time to reach a stock threshold. Example :`optimize:(electronic_circuit)`
+-   Stock definition: Declares the initial quantity for a resource. Missing stocks default to 0. Example : `iron_plate:15`
+-   Process definition: Describes consumption, production, and duration. Needs and results lists are semicolon-separated `name:qty` pairs. Either list may be empty. Example : `smelt:(ore:1;coal:1):(plate:1):3`
+-   Optimize directive: Chooses the objective. Use `optimize:(stock)` to maximize a stock quantity, or `optimize:(time;stock)` to minimize the time to reach a stock threshold. Example : `optimize:(electronic_circuit)`
 
 All identifiers are alphanumeric (underscores allowed for stocks) and quantities are signed integers. See the `input_files/` directory for complete examples such as `factorio`, `pomme`, and `recre`.
 
@@ -64,5 +64,4 @@ These are the best fitness values observed so far for the bundled scenarios (10,
 
 ## Development Notes
 
--   Format the code with `cargo fmt` and lint with `cargo clippy` before submitting substantial changes.
 -   The `TODO.md` file tracks parser and GA improvements that are still outstanding.
