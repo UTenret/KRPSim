@@ -2,6 +2,8 @@
 
 KRPSim explores hard resource-constrained scheduling problems (extended RCPSP) by combining a fast discrete-event simulator with a multi-island genetic algorithm. It ships with several puzzle-like scenarios inspired by manufacturing lines and management games.
 
+Project is unfinished and things are subject to change.
+
 ## Highlights
 
 -   Multi-island genetic algorithm with automatic stagnation resets and configurable mutation steps.
